@@ -2109,7 +2109,7 @@ $('#readerBody').addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
     const [a,b] = e.touches;
     state.pinch = { distance: Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY), zoom: state.zoom, target: state.zoom };
-    state.touchStart = null;
+    state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
     return;
   }
   if (e.touches.length !== 1 || state.zoom > 1.01) return;
