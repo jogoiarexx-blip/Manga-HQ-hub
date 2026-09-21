@@ -849,7 +849,7 @@ function isNewItem(item, days = 30) {
   if (!Number.isFinite(ts)) return false;
   return Date.now() - ts <= days * 86400000 && Date.now() >= ts;
 }
-function resetRenderLimit() { state.renderLimit = 60; }
+function resetRenderLimit() { state.renderLimit = performanceProfile().mobile ? 36 : 60; }
 function filtered() {
   const arr = state.items.filter(item => {
     const t = extType(item), p = progress[item.id];
@@ -1804,10 +1804,10 @@ document.addEventListener('click', e => {
 });
 
 $('#searchInput').addEventListener('input', e => { state.search = normalizeText(e.target.value.trim()); resetRenderLimit(); render(); });
-$('#sortSelect').addEventListener('change', e => { state.sort = e.target.value; resetRenderLimit(); render(); });
+$('#sortSelect').addEventListener('change', e => { state.sort = e.target.value; resetRenderLimit(); $('.toolbar')?.classList.remove('mobile-filters-open'); $('#mobileFilterBtn')?.setAttribute('aria-expanded','false'); if ($('#mobileFilterBtn')) $('#mobileFilterBtn').textContent='☰'; render(); });
 $('#showReadingBtn').addEventListener('click', () => { state.collection = ''; state.filter = 'reading'; $$('.nav').forEach(n => n.classList.toggle('active', n.dataset.filter === 'reading')); render(); });
 $('#backCollectionsBtn').addEventListener('click', () => { state.collection = ''; state.filter = 'collections'; $$('.nav').forEach(n => n.classList.toggle('active', n.dataset.filter === 'collections')); render(); });
-$('#sourceSelect')?.addEventListener('change', e => { state.source = e.target.value || 'all'; resetRenderLimit(); render(); });
+$('#sourceSelect')?.addEventListener('change', e => { state.source = e.target.value || 'all'; resetRenderLimit(); $('.toolbar')?.classList.remove('mobile-filters-open'); $('#mobileFilterBtn')?.setAttribute('aria-expanded','false'); if ($('#mobileFilterBtn')) $('#mobileFilterBtn').textContent='☰'; render(); });
 $('#clearCategoryBtn')?.addEventListener('click', () => { state.category = ''; resetRenderLimit(); render(); });
 $('#carouselPrevBtn')?.addEventListener('click', () => scrollFeatured(-1));
 $('#carouselNextBtn')?.addEventListener('click', () => scrollFeatured(1));
