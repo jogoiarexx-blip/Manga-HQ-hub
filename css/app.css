@@ -723,3 +723,45 @@ a{color:inherit}
 @media(prefers-reduced-motion:reduce){
   .flipbook-stage .flipbook-page{animation:none!important}
 }
+
+
+/* Manga-HQ-hub v0.2.3 — Flipbook interativo */
+.flipbook-stage{cursor:grab;--flip-progress:0}
+.flipbook-stage.is-dragging{cursor:grabbing;user-select:none}
+.flipbook-stage.is-dragging .flipbook-page{transition:none!important}
+.flipbook-page.is-live-flip{
+  z-index:12;
+  transition:none!important;
+  box-shadow:0 28px 70px rgba(0,0,0,.45),-8px 0 24px rgba(0,0,0,.14);
+}
+.flipbook-page.flip-snapback{
+  transition:transform .18s ease-out,filter .18s ease-out!important;
+}
+.flipbook-stage.is-dragging::after{
+  content:"";
+  position:absolute;
+  z-index:11;
+  inset:18px 20px 22px;
+  pointer-events:none;
+  opacity:calc(.12 + var(--flip-progress) * .48);
+  background:radial-gradient(circle at 50% 50%,transparent 30%,rgba(0,0,0,.36) 100%);
+  border-radius:10px;
+}
+.flipbook-stage.drag-next .flipbook-page-right::before,
+.flipbook-stage.drag-prev .flipbook-page-left::before,
+.flipbook-stage.spread-rtl.drag-next .flipbook-page-left::before,
+.flipbook-stage.spread-rtl.drag-prev .flipbook-page-right::before{
+  content:"";
+  position:absolute;
+  z-index:5;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,.12),transparent 22%,rgba(0,0,0,.12));
+}
+.flipbook-stage .flipbook-page-right{cursor:w-resize}
+.flipbook-stage .flipbook-page-left{cursor:e-resize}
+.flipbook-stage.spread-rtl .flipbook-page-right{cursor:e-resize}
+.flipbook-stage.spread-rtl .flipbook-page-left{cursor:w-resize}
+@media(max-width:850px){
+  .flipbook-stage.is-dragging::after{inset:8px 6px 10px}
+}
