@@ -1,15 +1,16 @@
-# Manga-HQ-hub v0.2.1
+# Manga-HQ-hub v0.2.2
 
 Hub de mangás e HQs com acervo WebP conectado e leitor integrado.
 
 ## Versão atual
 
-**0.2.1** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
+**0.2.2** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
 
 ## Recursos atuais
 
 - acervo WebP conectado ao Hub;
 - leitura direta das edições publicadas no acervo;
+- modo Flipbook com duas páginas, lombada central e animação de virada;
 - leitura de PDF, CBR, CBZ, RAR e ZIP;
 - abertura de arquivos locais;
 - modos página, dupla, vertical e webtoon;
