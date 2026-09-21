@@ -1,6 +1,6 @@
-// Manga HQ Reader — acervo WebP conectado ao Hub.
+// Manga-HQ-hub — acervo WebP conectado ao Hub.
 window.MHQR_CONFIG = {
-  appVersion: '2.3.2',
+  appVersion: '0.2.1',
   folderIds: [],
   folderUrls: [],
   folderId: '',
