@@ -1,5 +1,6 @@
-const CACHE_PREFIX = 'manga-hq-reader-ghpages-';
-const CACHE = `${CACHE_PREFIX}v2.3.2`;
+const CACHE_PREFIX = 'manga-hq-hub-ghpages-';
+const LEGACY_CACHE_PREFIXES = ['manga-hq-reader-ghpages-'];
+const CACHE = `${CACHE_PREFIX}v0.2.1`;
 const BASE = new URL('./', self.location.href);
 const CORE = [
   './', './index.html', './css/app.css', './js/app.js', './config.js',
@@ -11,7 +12,7 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => (k.startsWith(CACHE_PREFIX) && k !== CACHE) || LEGACY_CACHE_PREFIXES.some(prefix => k.startsWith(prefix))).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 async function networkFirst(request) {
