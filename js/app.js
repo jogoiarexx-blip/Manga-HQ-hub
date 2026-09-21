@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.2',
+  appVersion: '0.2.3',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -74,7 +74,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, flipDirection: ''
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1686,7 +1686,7 @@ async function cleanupReaderData() {
   state.readerDownloadController = null;
   stopVerticalObserver();
   state.renderToken++;
-  state.touchStart = null;
+  state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
   if (state.pdfObjectUrl) { URL.revokeObjectURL(state.pdfObjectUrl); state.pdfObjectUrl = ''; }
@@ -2005,8 +2005,94 @@ document.addEventListener('keydown', e => {
   if (e.key === '?') toast('Atalhos: ←/→ ou PgUp/PgDn páginas • Home/End início/fim • +/- zoom • 0 reset • F tela cheia • M modo • D direção • Esc sair');
 });
 
+function flipDragIntent(dx) {
+  if (!dx) return '';
+  const physical = dx < 0 ? 'left' : 'right';
+  if (state.direction === 'rtl') return physical === 'right' ? 'next' : 'prev';
+  return physical === 'left' ? 'next' : 'prev';
+}
+function flipDragPage(intent) {
+  const stage = $('.flipbook-stage');
+  if (!stage || !intent) return null;
+  const rtl = state.direction === 'rtl';
+  const side = intent === 'next' ? (rtl ? 'left' : 'right') : (rtl ? 'right' : 'left');
+  return stage.querySelector(`.flipbook-page-${side}`) || stage.querySelector('.flipbook-page');
+}
+function clearFlipDragPreview(snap = true) {
+  const stage = $('.flipbook-stage');
+  const page = stage?.querySelector('.flipbook-page.is-live-flip');
+  if (page) {
+    if (snap) page.classList.add('flip-snapback');
+    page.style.removeProperty('transform');
+    page.style.removeProperty('filter');
+    page.classList.remove('is-live-flip');
+    if (snap) setTimeout(() => page.classList.remove('flip-snapback'), 190);
+  }
+  stage?.classList.remove('is-dragging', 'drag-next', 'drag-prev');
+  stage?.style.removeProperty('--flip-progress');
+}
+function updateFlipDragPreview(clientX) {
+  if (!state.flipDrag || effectiveMode() !== 'spread' || state.zoom > 1.01) return;
+  const stage = $('.flipbook-stage'); if (!stage) return;
+  const dx = clientX - state.flipDrag.startX;
+  state.flipDrag.dx = dx;
+  const intent = flipDragIntent(dx);
+  const old = stage.querySelector('.flipbook-page.is-live-flip');
+  const page = flipDragPage(intent);
+  if (!page || Math.abs(dx) < 4) { clearFlipDragPreview(false); return; }
+  if (old && old !== page) { old.style.removeProperty('transform'); old.style.removeProperty('filter'); old.classList.remove('is-live-flip'); }
+  const width = Math.max(180, stage.getBoundingClientRect().width * .5);
+  const progress = Math.min(1, Math.abs(dx) / width);
+  const angle = Math.min(82, progress * 92);
+  const rtl = state.direction === 'rtl';
+  const side = page.classList.contains('flipbook-page-left') ? 'left' : 'right';
+  const sign = side === 'right' ? -1 : 1;
+  page.classList.add('is-live-flip');
+  page.style.transform = `rotateY(${sign * angle}deg) translateZ(1px)`;
+  page.style.filter = `brightness(${1 - progress * .22})`;
+  stage.classList.add('is-dragging');
+  stage.classList.toggle('drag-next', intent === 'next');
+  stage.classList.toggle('drag-prev', intent === 'prev');
+  stage.style.setProperty('--flip-progress', progress.toFixed(3));
+}
+async function finishFlipDrag(clientX, clientY = null) {
+  const drag = state.flipDrag; state.flipDrag = null;
+  if (!drag) return false;
+  const dx = clientX - drag.startX;
+  const dy = clientY == null ? 0 : clientY - drag.startY;
+  const elapsed = Math.max(1, Date.now() - drag.time);
+  const velocity = Math.abs(dx) / elapsed;
+  const shouldTurn = Math.abs(dx) >= 58 && Math.abs(dx) > Math.abs(dy) * 1.15 || velocity > .7 && Math.abs(dx) > 28;
+  const intent = flipDragIntent(dx);
+  clearFlipDragPreview(!shouldTurn);
+  if (!shouldTurn || !intent) return false;
+  state.lastFlipDragAt = Date.now();
+  state.lastSwipeAt = Date.now();
+  await setPage(intent === 'next' ? nextPageIndex() : prevPageIndex());
+  return true;
+}
+$('#readerBody').addEventListener('pointerdown', e => {
+  if (e.pointerType === 'touch' || effectiveMode() !== 'spread' || !state.pages.length || state.zoom > 1.01 || e.target.closest('button,a')) return;
+  const stage = e.target.closest('.flipbook-stage');
+  if (!stage) return;
+  state.flipDrag = { startX:e.clientX, startY:e.clientY, dx:0, time:Date.now(), pointerId:e.pointerId };
+  try { $('#readerBody').setPointerCapture(e.pointerId); } catch {}
+});
+$('#readerBody').addEventListener('pointermove', e => {
+  if (!state.flipDrag || state.flipDrag.pointerId !== e.pointerId) return;
+  const dx = e.clientX - state.flipDrag.startX, dy = e.clientY - state.flipDrag.startY;
+  if (Math.abs(dx) < 5 || Math.abs(dx) < Math.abs(dy)) return;
+  e.preventDefault();
+  updateFlipDragPreview(e.clientX);
+});
+$('#readerBody').addEventListener('pointerup', e => {
+  if (!state.flipDrag || state.flipDrag.pointerId !== e.pointerId) return;
+  finishFlipDrag(e.clientX, e.clientY).catch(() => {});
+});
+$('#readerBody').addEventListener('pointercancel', () => { state.flipDrag = null; clearFlipDragPreview(true); });
+
 $('#readerBody').addEventListener('click', e => {
-  if (!isPagedMode() || !state.pages.length || e.target.closest('button,a') || (Date.now() - Number(state.lastSwipeAt || 0) < 450)) return;
+  if (!isPagedMode() || !state.pages.length || e.target.closest('button,a') || (Date.now() - Number(state.lastSwipeAt || 0) < 450) || (Date.now() - Number(state.lastFlipDragAt || 0) < 450)) return;
   const rect = $('#readerBody').getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / Math.max(1, rect.width);
   if (ratio > .30 && ratio < .70) {
@@ -2028,15 +2114,26 @@ $('#readerBody').addEventListener('touchstart', e => {
   }
   if (e.touches.length !== 1 || state.zoom > 1.01) return;
   const t = e.touches[0]; state.touchStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+  if (effectiveMode() === 'spread' && e.target.closest('.flipbook-stage')) state.flipDrag = { startX:t.clientX, startY:t.clientY, dx:0, time:Date.now(), pointerId:null };
 }, { passive: true });
 $('#readerBody').addEventListener('touchmove', e => {
-  if (!state.pinch || e.touches.length !== 2) return;
-  e.preventDefault();
-  const [a,b] = e.touches;
-  const distance = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
-  const target = Math.max(.6, Math.min(3, state.pinch.zoom * (distance / Math.max(1,state.pinch.distance))));
-  state.pinch.target = target;
-  $('#zoomLabel').textContent = `${Math.round(target * 100)}%`;
+  if (state.pinch && e.touches.length === 2) {
+    e.preventDefault();
+    const [a,b] = e.touches;
+    const distance = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    const target = Math.max(.6, Math.min(3, state.pinch.zoom * (distance / Math.max(1,state.pinch.distance))));
+    state.pinch.target = target;
+    $('#zoomLabel').textContent = `${Math.round(target * 100)}%`;
+    return;
+  }
+  if (state.flipDrag && e.touches.length === 1 && effectiveMode() === 'spread' && state.zoom <= 1.01) {
+    const t = e.touches[0];
+    const dx = t.clientX - state.flipDrag.startX, dy = t.clientY - state.flipDrag.startY;
+    if (Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)) {
+      e.preventDefault();
+      updateFlipDragPreview(t.clientX);
+    }
+  }
 }, { passive:false });
 $('#readerBody').addEventListener('touchend', e => {
   if (state.pinch && e.touches.length < 2) {
@@ -2044,8 +2141,12 @@ $('#readerBody').addEventListener('touchend', e => {
     setZoom(target); return;
   }
   const start = state.touchStart; state.touchStart = null;
+  const t = e.changedTouches?.[0]; if (!t) { state.flipDrag = null; clearFlipDragPreview(true); return; }
+  if (state.flipDrag && effectiveMode() === 'spread') {
+    finishFlipDrag(t.clientX, t.clientY).catch(() => {});
+    return;
+  }
   if (!start || !isPagedMode() || !state.pages.length || state.zoom > 1.01) return;
-  const t = e.changedTouches?.[0]; if (!t) return;
   const dx = t.clientX - start.x, dy = t.clientY - start.y;
   if (Date.now() - start.time > 700 || Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
   const swipeLeft = dx < 0;
@@ -2055,7 +2156,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.2', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.3', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
