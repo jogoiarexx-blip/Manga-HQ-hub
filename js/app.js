@@ -2,11 +2,12 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '2.3.1',
+  appVersion: '2.3.2',
   folderIds: [],
   folderUrls: [],
   folderId: '',
   folderUrl: '',
+  externalSources: [],
   driveApiKey: '',
   largeArchiveWarningMB: 180,
   pageCacheLimit: 12,
@@ -308,7 +309,7 @@ function bytes(n) {
   return `${n.toFixed(i ? 1 : 0)} ${u[i]}`;
 }
 function extType(item) {
-  if (item?.readerType === 'drive-pages' || item?.mimeType === 'application/x-mhqr-pages') return 'pages';
+  if (['drive-pages','web-pages'].includes(item?.readerType) || ['application/x-mhqr-pages','application/x-mhqr-web-pages'].includes(item?.mimeType)) return 'pages';
   const n = (item.name || '').toLowerCase();
   if (n.endsWith('.pdf')) return 'pdf';
   if (/\.(cbr|cbz|rar|zip)$/.test(n)) return 'comic';
@@ -341,11 +342,13 @@ function uniqueItems(items) {
   return [...new Map(items.filter(x => x?.id && x?.name).map(x => [x.id, { ...x, size: Number(x.size || 0) }])).values()];
 }
 function thumbUrl(item) {
+  if (item.coverUrl) return item.coverUrl;
   if (item.localFile && !item.thumbnailLink) return '';
   if (extType(item) === 'pages' && item.coverPageId) return item.thumbnailLink || `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.coverPageId)}&sz=w420`;
   return item.thumbnailLink || `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.id)}&sz=w420`;
 }
 function driveViewUrl(item) {
+  if (item.sourceUrl) return item.sourceUrl;
   if (extType(item) === 'pages' && item.driveFolderId) return `https://drive.google.com/drive/folders/${encodeURIComponent(item.driveFolderId)}`;
   const u = new URL(`https://drive.google.com/file/d/${encodeURIComponent(item.id)}/view`); if (item.resourceKey) u.searchParams.set('resourcekey', item.resourceKey); return u.href;
 }
@@ -441,14 +444,61 @@ function archiveWarningLimitMB() {
   return configured;
 }
 
+function resolveExternalUrl(base, value) {
+  if (!value) return '';
+  try { return new URL(value, base).href; }
+  catch { return ''; }
+}
+async function loadExternalCatalogs() {
+  const sources = Array.isArray(CONFIG.externalSources) ? CONFIG.externalSources : [];
+  const items = [];
+  for (let index = 0; index < sources.length; index++) {
+    const src = sources[index] || {};
+    if (!src.catalogUrl) continue;
+    try {
+      const catalogUrl = resolveExternalUrl(location.href, src.catalogUrl);
+      const siteUrl = resolveExternalUrl(catalogUrl, src.siteUrl || './');
+      const r = await fetch(catalogUrl, { cache:'no-store' });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const rows = Array.isArray(data?.items) ? data.items : [];
+      const sourceId = String(src.id || `external-${index + 1}`);
+      const sourceName = String(src.name || data?.name || `Acervo ${index + 1}`);
+      for (const row of rows) {
+        const rawId = String(row?.id || row?.title || row?.name || '');
+        const name = String(row?.title || row?.name || rawId).trim();
+        if (!rawId || !name) continue;
+        items.push({
+          id: `external:${sourceId}:${rawId}`,
+          name,
+          readerType: 'web-pages',
+          mimeType: 'application/x-mhqr-web-pages',
+          pageCount: Number(row?.pageCount || 0),
+          coverUrl: resolveExternalUrl(siteUrl, row?.cover || ''),
+          manifestUrl: resolveExternalUrl(siteUrl, row?.manifest || ''),
+          sourceUrl: siteUrl,
+          externalSourceId: sourceId,
+          externalSourceName: sourceName,
+          seriesTitle: String(row?.collectionTitle || ''),
+          issueNumber: row?.issue ?? null,
+          folderPath: String(row?.collectionTitle || data?.name || sourceName),
+          size: 0
+        });
+      }
+    } catch (err) {
+      console.warn('Falha ao carregar acervo externo:', src?.name || src?.catalogUrl, err);
+    }
+  }
+  return uniqueItems(items);
+}
 async function loadStaticCatalog() {
   const r = await fetch('./data/catalog.json', { cache: 'no-store' });
   if (!r.ok) throw new Error(`Catálogo local: HTTP ${r.status}`);
   const bundled = uniqueItems(await r.json());
+  const external = await loadExternalCatalogs();
   const cached = readJson(LS.catalog, []);
-  // Itens do catálogo publicado têm prioridade sobre versões antigas salvas no navegador.
-  // Assim, novos metadados (como drivePages) não são apagados por um cache legado.
-  return uniqueItems([...(Array.isArray(cached) ? cached : []), ...bundled]);
+  // Itens publicados têm prioridade sobre versões antigas salvas no navegador.
+  return uniqueItems([...(Array.isArray(cached) ? cached : []), ...bundled, ...external]);
 }
 function saveCatalogCache(items) {
   const clean = uniqueItems(items).map(({ localFile, offline, ...item }) => item);
@@ -750,11 +800,13 @@ function renderContinueRail() {
 function sourceKeyFor(item) {
   if (!item) return 'other';
   if (item.localFile || item.offline || item.offlineOriginId) return 'offline';
+  if (item.externalSourceId) return `external-${String(item.externalSourceId).replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}`;
   const path = String(item.folderPath || '');
   const match = path.match(/^Biblioteca\s+(\d+)(?:\/|$)/i);
   return match ? `library-${match[1]}` : 'other';
 }
 function sourceLabelFor(item) {
+  if (item?.externalSourceName) return item.externalSourceName;
   const key = sourceKeyFor(item);
   if (key === 'offline') return 'Offline/local';
   const match = key.match(/^library-(\d+)$/);
@@ -786,7 +838,7 @@ function itemCard(item) {
       <div class="title">${escapeHtml(item.name)}</div>
       <div class="meta"><span>${escapeHtml(sizeMeta)}</span><span>${status}</span></div><div class="source-line"><span class="source-chip source-${escapeHtml(sourceKeyFor(item))}">${escapeHtml(sourceLabelFor(item))}</span>${item.folderPath ? `<span class="source-path" title="${escapeHtml(item.folderPath)}">${escapeHtml(cleanFolderLabel(item.folderPath) || item.folderPath)}</span>` : ''}</div>
       <div class="progress"><i style="width:${pct}%"></i></div>
-      <div class="card-actions"><button data-action="read">${pct >= 100 ? 'Ler novamente' : pct ? 'Continuar' : 'Ler agora'}</button>${pageFolder ? '' : `<button class="secondary offline-action ${offline ? 'on' : ''}" data-action="offline" title="${offline ? 'Remover do offline' : 'Salvar para ler offline'}">${offlineBusy ? '…' : offline ? '✓' : '☁'}</button><button class="secondary download-action" data-action="download" title="Baixar arquivo">⇩</button>`}${item.localFile ? '' : '<button class="secondary" data-action="drive" title="Abrir no Drive">↗</button>'}</div>
+      <div class="card-actions"><button data-action="read">${pct >= 100 ? 'Ler novamente' : pct ? 'Continuar' : 'Ler agora'}</button>${pageFolder ? '' : `<button class="secondary offline-action ${offline ? 'on' : ''}" data-action="offline" title="${offline ? 'Remover do offline' : 'Salvar para ler offline'}">${offlineBusy ? '…' : offline ? '✓' : '☁'}</button><button class="secondary download-action" data-action="download" title="Baixar arquivo">⇩</button>`}${item.localFile ? '' : '<button class="secondary" data-action="drive" title="${item.externalSourceId ? 'Abrir acervo' : 'Abrir no Drive'}">↗</button>'}</div>
     </div>
   </article>`;
 }
@@ -1209,6 +1261,17 @@ async function openComic(item, token) {
 }
 
 async function loadDrivePageFolder(item, token) {
+  if (item?.manifestUrl) {
+    const r = await fetch(item.manifestUrl, { cache:'no-store' });
+    if (!r.ok) throw new Error(`Manifesto do acervo: HTTP ${r.status}`);
+    const manifest = await r.json();
+    if (token !== state.openToken) throw new DOMException('Leitura cancelada.', 'AbortError');
+    const base = new URL('./', item.manifestUrl).href;
+    const names = Array.isArray(manifest?.pages) ? manifest.pages : [];
+    const files = names.map((name, index) => ({ name:String(name), url:resolveExternalUrl(base, name), index })).filter(file => file.url);
+    if (!files.length) throw new Error('Nenhuma página foi encontrada no manifesto deste acervo.');
+    return { manifest, files, web:true };
+  }
   if (Array.isArray(item?.drivePages) && item.drivePages.length) {
     return { manifest: { title:item.name, issue:item.issueNumber, pageCount:item.drivePages.length }, files:item.drivePages };
   }
@@ -1235,11 +1298,11 @@ async function openDrivePages(item, token) {
   try {
     const bundle = await loadDrivePageFolder(item, token);
     if (token !== state.openToken) return;
-    state.archive = { type:'drive-pages', entries:bundle.files, folderId:item.driveFolderId };
+    state.archive = { type:bundle.web ? 'web-pages' : 'drive-pages', entries:bundle.files, folderId:item.driveFolderId || '' };
     state.pages = bundle.files.map((file, index) => ({ ...file, index }));
     state.page = Math.max(0, Math.min(state.page, state.pages.length - 1));
     if (bundle.manifest?.title) $('#readerTitle').textContent = bundle.manifest.title;
-    $('#readerMeta').textContent = `${state.pages.length} páginas • WebP direto do Google Drive`;
+    $('#readerMeta').textContent = `${state.pages.length} páginas • ${bundle.web ? 'WebP do acervo conectado' : 'WebP direto do Google Drive'}`;
     $('#readerLoading').classList.add('hidden');
     $('#pageRange').max = state.pages.length;
     updateReaderPrefsUI();
@@ -1352,6 +1415,13 @@ async function getPageUrl(index, expectedToken = state.renderToken) {
   if (!archive || !page) throw new Error('Página inexistente.');
   if (state.pageUrls.has(index)) { state.pageUse.set(index, Date.now()); return state.pageUrls.get(index); }
   const entry = archive.entries[index];
+  if (archive.type === 'web-pages') {
+    const url = entry?.url || '';
+    if (!url) throw new Error(`Página ${index + 1} sem URL no acervo.`);
+    state.pageUrls.set(index, url); state.pageUse.set(index, Date.now());
+    trimPageCache(index);
+    return url;
+  }
   if (archive.type === 'drive-pages') {
     const size = performanceProfile().eco ? 'w1800' : 'w2400';
     const apiUrl = await fetchDrivePageWithApi(entry, expectedToken);
@@ -1971,7 +2041,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga HQ Reader', version: CONFIG.appVersion || '2.3.1', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga HQ Reader', version: CONFIG.appVersion || '2.3.2', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-reader-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
