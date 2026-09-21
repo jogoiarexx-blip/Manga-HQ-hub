@@ -1,0 +1,20 @@
+MANGA HQ READER v2.1.0 — GITHUB PAGES
+
+1. Extraia o ZIP.
+2. Envie TODO o conteúdo desta pasta para a raiz do repositório GitHub.
+3. No GitHub: Settings → Pages.
+4. Source: Deploy from a branch.
+5. Branch: main.
+6. Folder: /(root).
+7. Salve.
+
+O projeto usa caminhos relativos e funciona em:
+https://SEU-USUARIO.github.io/NOME-DO-REPOSITORIO/
+
+ATUALIZAÇÃO:
+O service worker v5 limpa somente caches antigos do Manga HQ Reader e não interfere em outros projetos do mesmo github.io.
+Ao publicar uma nova versão, abra o site e recarregue uma vez.
+
+GOOGLE DRIVE:
+As quatro bibliotecas configuradas são sincronizadas quando uma Google Drive API Key válida está salva nas configurações.
+Depois da primeira sincronização completa, o catálogo de metadados também fica salvo no navegador como fallback local.

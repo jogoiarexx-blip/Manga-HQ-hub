@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111217" />
+  <meta name="description" content="Leitor local de mangás e HQs em PDF, CBR, CBZ, RAR e ZIP, sem acervo pré-carregado." />
+  <title>Manga HQ Reader v2.3.1</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon-64.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <link rel="stylesheet" href="./css/app.css?v=2.3.1" />
+</head>
+<body class="no-drive-build">
+  <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-logo" src="./logo-manga-hq-reader.png" alt="Manga HQ Reader" />
+        <div class="brand-copy"><strong>Manga HQ Reader</strong><small>Leitor local</small></div>
+      </div>
+      <div class="top-actions">
+        <button id="localBtn" class="ghost" title="Abrir arquivo do aparelho" aria-label="Abrir arquivo do aparelho">Abrir arquivo</button>
+        <button id="installBtn" class="ghost hidden">Instalar</button>
+        <button id="driveBtn" class="ghost">Fontes</button>
+        <button id="settingsBtn" class="icon-btn" title="Configurações">⚙</button>
+        <span id="networkStatus" class="network-status" role="status" aria-live="polite">● Online</span><button id="themeBtn" class="icon-btn" title="Alternar tema">◐</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <nav>
+          <button class="nav active" data-filter="all">▦ <span>Biblioteca</span></button>
+          <button class="nav" data-filter="reading">▶ <span>Continuar lendo</span></button>
+          <button class="nav" data-filter="collections">▤ <span>Coleções</span></button>
+          <button class="nav" data-filter="favorites">★ <span>Favoritos</span></button>
+          <button class="nav" data-filter="bookmarks">🔖 <span>Marcadores</span></button>
+          <button class="nav" data-filter="completed">✓ <span>Lidos</span></button>
+          <button class="nav" data-filter="offline">⇩ <span>Offline</span></button>
+          <button class="nav" data-filter="new">✦ <span>Novos</span></button>
+          <button class="nav" data-filter="pdf">PDF <span>PDFs</span></button>
+          <button class="nav" data-filter="comic">CBR <span>HQs/Mangás</span></button>
+        </nav>
+        <div class="sidebar-card">
+          <strong id="syncStatus">Biblioteca pronta</strong>
+          <small id="syncDetail">Carregando catálogo…</small>
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="hero">
+          <div class="hero-copy">
+            <span class="eyebrow">LEITOR LIMPO • SEM ACERVO</span>
+            <h1>Mangás e HQs em um leitor só.</h1>
+            <p>Versão sem acervo pré-carregado. Abra seus próprios arquivos PDF, CBR, CBZ, RAR ou ZIP e use o leitor normalmente no PC ou no celular.</p>
+            <div class="hero-tags"><span>PDF</span><span>CBR / CBZ / RAR / ZIP</span><span>Arquivos locais</span><span>RTL inteligente</span><span>Progresso automático</span></div>
+          </div>
+          <div class="stats">
+            <div><b id="itemCount">0</b><span>arquivos</span></div>
+            <div><b id="favoriteCount">0</b><span>favoritos</span></div>
+            <div><b id="readingCount">0</b><span>em leitura</span></div>
+            <div><b id="completedCount">0</b><span>lidos</span></div>
+          </div>
+        </div>
+
+        <div id="catalogNotice" class="catalog-notice hidden"><strong>Catálogo local</strong><span id="catalogNoticeText"></span></div>
+
+        <div id="apiNotice" class="notice hidden">
+          <div><strong>Leitura direta pelo Google Drive</strong><span>Esta versão não possui acervo pré-carregado. Use “Abrir arquivo” para ler seus próprios quadrinhos.</span></div>
+          <button id="noticeSettingsBtn">Configurar</button>
+        </div>
+
+        <section id="continueSection" class="continue-section hidden">
+          <div class="section-head"><div><span class="eyebrow">RETOMAR</span><h2>Continue de onde parou</h2></div><button id="showReadingBtn" class="ghost small">Ver todos</button></div>
+          <div id="continueRail" class="continue-rail"></div>
+        </section>
+
+        <section id="featuredSection" class="featured-section">
+          <div class="section-head">
+            <div><span class="eyebrow">DESTAQUES</span><h2>Carrossel de coleções</h2></div>
+            <div class="carousel-actions">
+              <button id="carouselPrevBtn" class="ghost small" aria-label="Voltar no carrossel">‹</button>
+              <button id="carouselNextBtn" class="ghost small" aria-label="Avançar no carrossel">›</button>
+            </div>
+          </div>
+          <div id="featuredCarousel" class="featured-carousel"></div>
+        </section>
+
+        <section id="categoriesSection" class="categories-section">
+          <div class="section-head">
+            <div><span class="eyebrow">CATEGORIAS</span><h2>Explore por universo</h2></div>
+            <button id="clearCategoryBtn" class="ghost small hidden">Limpar categoria</button>
+          </div>
+          <div id="categoryChips" class="category-chips"></div>
+        </section>
+
+        <section id="universeRails" class="universe-rails"></section>
+
+        <div id="collectionBar" class="collection-bar hidden"><button id="backCollectionsBtn" class="ghost">← Coleções</button><strong id="collectionTitle"></strong><span id="collectionMeta"></span></div>
+
+        <div class="toolbar">
+          <label class="search"><span>⌕</span><input id="searchInput" placeholder="Buscar título, volume, edição..." /></label>
+          <select id="sourceSelect" aria-label="Filtrar por fonte">
+            <option value="all">Todas as fontes</option>
+            <option value="offline">Offline/local</option>
+          </select>
+          <select id="sortSelect" aria-label="Ordenar biblioteca">
+            <option value="name">Nome A–Z</option>
+            <option value="name-desc">Nome Z–A</option>
+            <option value="size">Menor arquivo</option>
+            <option value="size-desc">Maior arquivo</option>
+            <option value="recent">Lidos recentemente</option>
+            <option value="modified">Adicionados recentemente</option>
+          </select>
+          <button id="refreshBtn">Atualizar</button>
+        </div>
+
+        <div id="emptyState" class="empty hidden">Nenhum item encontrado.</div>
+        <div id="libraryGrid" class="grid"></div>
+        <button id="loadMoreBtn" class="load-more hidden">Carregar mais</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="reader" class="reader hidden" aria-hidden="true">
+    <div class="reader-topbar">
+      <button id="closeReader" class="icon-btn" title="Voltar">←</button>
+      <div class="reader-title-wrap"><strong id="readerTitle">Leitor</strong><small id="readerMeta"></small></div>
+      <button id="readerMenuBtn" class="icon-btn reader-menu-btn" title="Controles do leitor" aria-label="Controles do leitor" aria-expanded="false">⋯</button>
+      <div class="reader-controls">
+        <button id="offlineCurrentBtn" class="ghost offline-reader" title="Salvar para ler sem internet">☁ Salvar offline</button>
+        <button id="downloadCurrentBtn" class="ghost download-reader" title="Baixar arquivo">⇩ Baixar</button>
+        <button id="completeBtn" class="ghost" title="Marcar como lido">✓ Marcar lido</button>
+        <button id="modeBtn" class="ghost" title="Alternar modo de leitura">Modo: Página</button>
+        <button id="autoScrollBtn" class="ghost hidden" title="Rolagem automática">▶ Auto</button>
+        <button id="directionBtn" class="ghost" title="Direção da leitura">Leitura: →</button>
+        <button id="fitBtn" class="ghost" title="Alternar ajuste">Ajuste: Página</button>
+        <button id="thumbsBtn" class="ghost" title="Miniaturas das páginas">▦ Miniaturas</button>
+        <button id="trimBtn" class="ghost" title="Corte leve de margens">✂ Margens</button>
+        <button id="bookmarkBtn" class="ghost" title="Marcar esta página">☆ Marcador</button>
+        <button id="displayBtn" class="ghost" title="Ajustes visuais">Aa Visual</button>
+        <button id="immersiveBtn" class="ghost" title="Modo imersivo">◫ Imersivo</button>
+        <div id="zoomControls" class="zoom-controls">
+          <button id="zoomOutBtn" class="icon-btn" title="Diminuir zoom">−</button>
+          <button id="zoomLabel" class="zoom-label" title="Restaurar zoom">100%</button>
+          <button id="zoomInBtn" class="icon-btn" title="Aumentar zoom">+</button>
+        </div>
+        <button id="fullscreenBtn" class="icon-btn" title="Tela cheia">⛶</button>
+      </div>
+    </div>
+    <div id="readerDisplayPanel" class="reader-display-panel hidden" aria-label="Ajustes visuais de leitura">
+      <div class="reader-display-head"><strong>Ajustes visuais</strong><button id="closeDisplayBtn" class="icon-btn" aria-label="Fechar ajustes visuais">×</button></div>
+      <label><span>Brilho <b id="brightnessValue">100%</b></span><input id="brightnessRange" type="range" min="60" max="140" value="100" /></label>
+      <label><span>Contraste <b id="contrastValue">100%</b></span><input id="contrastRange" type="range" min="60" max="170" value="100" /></label>
+      <label><span>Sépia <b id="sepiaValue">0%</b></span><input id="sepiaRange" type="range" min="0" max="80" value="0" /></label>
+      <div class="reader-display-actions"><button id="nightProfileBtn" class="ghost">☾ Perfil noturno</button><button id="resetDisplayBtn" class="ghost">↺ Restaurar</button></div>
+    </div>
+    <aside id="thumbDrawer" class="thumb-drawer hidden" aria-label="Miniaturas das páginas">
+      <div class="thumb-drawer-head"><strong>Páginas</strong><button id="closeThumbsBtn" class="icon-btn" aria-label="Fechar miniaturas">×</button></div>
+      <div id="thumbGrid" class="thumb-grid"></div>
+    </aside>
+    <div id="readerBody" class="reader-body"></div>
+    <div id="readerFooter" class="reader-footer hidden">
+      <button id="prevPage">‹</button>
+      <input id="pageRange" type="range" min="1" max="1" value="1" />
+      <label class="page-jump" title="Ir para página"><input id="pageNumberInput" type="number" min="1" value="1" inputmode="numeric" aria-label="Ir para página" /><span id="pageLabel">1 / 1</span></label>
+      <button id="bookmarkJumpBtn" class="bookmark-jump" title="Ir para o próximo marcador">☆ 0</button>
+      <button id="nextPage">›</button>
+      <button id="nextIssueBtn" class="next-issue hidden">Próxima edição →</button>
+    </div>
+    <div id="readerLoading" class="reader-loading hidden">
+      <div class="spinner"></div>
+      <strong>Preparando leitura…</strong>
+      <span id="loadingText">Carregando arquivo</span>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-card">
+      <div class="modal-head"><div><strong id="settingsTitle">Configurações do Drive</strong><small>GitHub Pages • sem servidor</small></div><button id="closeSettings" class="icon-btn">×</button></div>
+      <div class="modal-body">
+        <label class="field"><span>Google Drive API Key</span><input id="apiKeyInput" type="password" autocomplete="off" placeholder="Cole sua chave aqui" /></label>
+        <p class="help">As pastas públicas já estão configuradas. HQs WebP presentes no catálogo podem ser lidas sem chave. A Google Drive API Key serve para descobrir novos arquivos, atualizar as bibliotecas e melhorar a compatibilidade com PDFs/arquivos compactados. Restrinja a chave ao endereço do seu GitHub Pages e habilite somente a Google Drive API.</p>
+        <div class="settings-grid">
+          <label class="field"><span>Modo padrão</span><select id="defaultModeSelect"><option value="page">Página única</option><option value="spread">Página dupla</option><option value="vertical">Vertical contínuo</option><option value="webtoon">Webtoon</option></select></label>
+          <label class="field"><span>Direção padrão</span><select id="directionSelect"><option value="ltr">Esquerda → direita</option><option value="rtl">Direita → esquerda (mangá)</option></select></label>
+          <label class="field"><span>Desempenho</span><select id="performanceSelect"><option value="auto">Automático</option><option value="eco">Econômico / celular fraco</option><option value="quality">Qualidade máxima</option></select><small id="performanceHint" class="field-hint"></small></label>
+          <label class="field"><span>Velocidade da rolagem automática</span><select id="autoScrollSpeedSelect"><option value="28">Lenta</option><option value="46">Normal</option><option value="70">Rápida</option><option value="100">Muito rápida</option></select></label>
+        </div>
+        <div class="drive-health">
+          <div><strong>Conexão com Google Drive</strong><small id="driveHealthText">Aguardando teste…</small></div>
+          <button id="testDriveBtn" class="secondary-btn">Testar conexão</button>
+        </div>
+        <div id="syncProgressBox" class="sync-progress-box hidden">
+          <div class="sync-progress-head"><strong>Sincronização</strong><button id="cancelSyncBtn" class="secondary-btn">Cancelar</button></div>
+          <div id="syncProgressRows" class="sync-progress-rows"></div>
+        </div>
+        <div class="diagnostics-box">
+          <div class="diagnostics-head"><div><strong>Diagnóstico do leitor</strong><small>Verifique compatibilidade, PWA, armazenamento e motores.</small></div><button id="runDiagnosticsBtn" class="secondary-btn">Executar</button></div>
+          <div id="diagnosticsResults" class="diagnostics-results"><span>Ainda não executado.</span></div>
+        </div>
+        <details class="drive-help">
+          <summary>Como ler os arquivos do Drive no app?</summary>
+          <ol>
+            <li>Deixe as pastas como públicas em <b>Qualquer pessoa com o link</b>.</li>
+            <li>Para sincronizar novidades automaticamente, crie uma API Key no Google Cloud com a <b>Google Drive API</b> ativada.</li>
+            <li>Restrinja a chave ao endereço do seu GitHub Pages e à Google Drive API.</li>
+            <li>Cole a chave acima, toque em <b>Testar conexão</b> e depois em <b>Salvar e sincronizar</b>.</li>
+            <li>Na biblioteca, toque em <b>Ler agora</b>. Pastas com <b>manifest.json</b> + páginas WebP abrem página a página; PDF, CBR e CBZ continuam compatíveis.</li>
+          </ol>
+          <p>Arquivos privados exigem autenticação OAuth; uma API Key sozinha serve para conteúdo público.</p>
+        </details>
+        <div class="config-status" id="configStatus"></div><div class="runtime-status" id="runtimeStatus">Preparando motores de leitura…</div>
+        <div class="offline-settings"><div><strong>Biblioteca offline</strong><small id="offlineStorageInfo">Calculando armazenamento…</small></div><button id="clearOfflineBtn" class="secondary-btn">Limpar offline</button></div>
+        <div class="data-actions"><button id="exportDataBtn" class="secondary-btn">Exportar progresso</button><button id="importDataBtn" class="secondary-btn">Importar progresso</button><button id="resetProgressBtn" class="danger-btn">Limpar progresso</button></div>
+        <div class="modal-actions"><button id="clearKeyBtn" class="secondary-btn">Remover chave</button><button id="saveKeyBtn">Salvar e sincronizar</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="driveModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="driveTitle">
+    <div class="modal-card compact">
+      <div class="modal-head"><div><strong id="driveTitle">Fontes da biblioteca</strong><small>Leitor independente, sem acervo conectado</small></div><button id="closeDriveModal" class="icon-btn">×</button></div>
+      <div class="modal-body"><div id="driveSummary" class="drive-summary"></div><div id="driveRoots" class="drive-roots"></div><div id="externalSources" class="external-sources"></div></div>
+    </div>
+  </div>
+
+  <div id="largeFileModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="largeFileTitle">
+    <div class="modal-card compact">
+      <div class="modal-head"><div><strong id="largeFileTitle">Arquivo muito grande</strong><small id="largeFileMeta"></small></div></div>
+      <div class="modal-body">
+        <p class="help">CBR/CBZ é processado no seu aparelho. Em celulares com pouca memória, arquivos muito grandes podem fechar a aba.</p>
+        <div class="modal-actions"><button id="cancelLargeBtn" class="secondary-btn">Cancelar</button><button id="continueLargeBtn">Tentar abrir</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dropOverlay" class="drop-overlay hidden"><div><strong>Solte o arquivo aqui</strong><span>PDF, CBR, CBZ, RAR ou ZIP</span></div></div>
+  <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
+  <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
+
+  <script src="./config.js?v=2.3.1"></script>
+  <script type="module" src="./js/app.js?v=2.3.1"></script>
+</body>
+</html>

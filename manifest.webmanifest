@@ -1,0 +1,36 @@
+{
+  "name": "Manga HQ Reader",
+  "short_name": "HQ Reader",
+  "description": "Leitor local de mangás e HQs em PDF, CBR, CBZ, RAR e ZIP, sem acervo pré-carregado.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d0f13",
+  "theme_color": "#111217",
+  "categories": [
+    "books",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Abrir biblioteca",
+      "short_name": "Biblioteca",
+      "url": "./"
+    }
+  ]
+}
