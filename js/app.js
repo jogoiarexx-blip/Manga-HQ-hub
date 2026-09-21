@@ -668,9 +668,10 @@ async function loadLibrary() {
     } else {
       state.syncStatus=[]; renderSyncProgress();
       state.items = await loadStaticCatalog(); const sm=readJson(LS.syncMeta,{}); const last=formatDateTime(sm.at);
-      $('#syncStatus').textContent = last ? 'Catálogo salvo ativo' : 'Catálogo local ativo';
-      $('#syncDetail').textContent = `${state.items.length} itens disponíveis${last ? ` • última sincronização: ${last}` : ' • configure a API para carregar todas as subpastas'}`;
-      $('#catalogNoticeText').textContent = `Sem a API Key, o app mostra o catálogo publicado. Com a API, ele percorre as ${(CONFIG.folderIds || []).length || 1} bibliotecas e descobre novas pastas e arquivos.`; $('#catalogNotice').classList.remove('hidden');
+      const externalCount = state.items.filter(item => item.externalSourceId).length;
+      $('#syncStatus').textContent = externalCount ? 'Acervo conectado ativo' : (last ? 'Catálogo salvo ativo' : 'Catálogo local ativo');
+      $('#syncDetail').textContent = externalCount ? `${state.items.length} itens disponíveis • Manga HQ Acervo: ${externalCount}` : `${state.items.length} itens disponíveis${last ? ` • última sincronização: ${last}` : ''}`;
+      $('#catalogNoticeText').textContent = externalCount ? `Manga HQ Acervo conectado com ${externalCount} edições WebP. As novas edições publicadas no catálogo aparecem ao atualizar a biblioteca.` : 'Nenhum acervo remoto conectado.'; $('#catalogNotice').classList.remove('hidden');
     }
   } catch (err) {
     state.items = await loadStaticCatalog().catch(()=>[]); $('#syncStatus').textContent='Falha no catálogo'; $('#syncDetail').textContent=err.message; toast(`Falha ao carregar biblioteca: ${err.message}`);
