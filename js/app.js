@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.4',
+  appVersion: '0.2.5',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -70,7 +70,7 @@ const readJson = (key, fallback) => {
 };
 
 const state = {
-  items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: 60,
+  items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
@@ -152,6 +152,7 @@ function setImmersive(value = !state.immersive) {
 function performanceProfile() {
   const mode = prefs.performance || 'auto';
   const mobile = matchMedia('(max-width: 850px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
+  const smallMobile = mobile && matchMedia('(max-width: 430px)').matches;
   const memory = Number(navigator.deviceMemory || 0);
   const cores = Number(navigator.hardwareConcurrency || 0);
   const constrained = (memory && memory <= 4) || (cores && cores <= 4);
@@ -159,11 +160,11 @@ function performanceProfile() {
   const quality = mode === 'quality';
   const hugeComic = Boolean(state.current && extType(state.current)==='comic' && Number(state.current.size||0) > 180*1024*1024);
   return {
-    mode, mobile, eco: eco || hugeComic, quality,
-    cacheLimit: (eco || hugeComic) ? 5 : (mobile && !quality ? 8 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))),
-    pdfDpr: eco ? 1 : (mobile && !quality ? 1.35 : 2),
-    verticalWindow: eco ? 1 : (mobile && !quality ? 2 : 5),
-    observerMargin: eco ? 420 : (mobile && !quality ? 700 : 1200),
+    mode, mobile, smallMobile, eco: eco || hugeComic, quality,
+    cacheLimit: (eco || hugeComic) ? 5 : (smallMobile && !quality ? 6 : (mobile && !quality ? 8 : Math.max(8, Number(CONFIG.pageCacheLimit || 12)))),
+    pdfDpr: eco ? 1 : (smallMobile && !quality ? 1.15 : (mobile && !quality ? 1.35 : 2)),
+    verticalWindow: eco ? 1 : (smallMobile && !quality ? 1 : (mobile && !quality ? 2 : 5)),
+    observerMargin: eco ? 380 : (smallMobile && !quality ? 520 : (mobile && !quality ? 700 : 1200)),
     prefetch: !eco && !hugeComic && document.visibilityState !== 'hidden'
   };
 }
@@ -1316,7 +1317,7 @@ async function openDrivePages(item, token) {
 
 async function renderThumbDrawer() {
   const grid=$('#thumbGrid'); if (!grid || !state.pages.length) return;
-  const token=++state.thumbRenderToken; const max=Math.min(state.pages.length, 120);
+  const token=++state.thumbRenderToken; const max=Math.min(state.pages.length, performanceProfile().mobile ? 60 : 120);
   grid.innerHTML=Array.from({length:max},(_,i)=>`<button class="thumb-item ${i===state.page?'active':''}" data-thumb-page="${i}"><span>${i+1}</span><div class="thumb-preview" data-thumb-preview="${i}"></div></button>`).join('') + (state.pages.length>max ? `<p class="thumb-limit">Mostrando ${max} de ${state.pages.length} páginas para economizar memória.</p>`:'');
   const isPdf=Boolean(state.pdfDoc);
   for (let i=0;i<max;i++) {
@@ -1879,6 +1880,14 @@ $('#clearKeyBtn').addEventListener('click', async () => {
   storageRemove(LS.apiKey); $('#apiKeyInput').value = ''; $('#configStatus').textContent = 'Chave removida.'; closeSettings(); await (async () => { await refreshOfflineIndex(); await updateOfflineStorageInfo(); await loadLibrary(); })();
 });
 
+$('#mobileFilterBtn')?.addEventListener('click', () => {
+  const toolbar = $('.toolbar'); if (!toolbar) return;
+  const open = toolbar.classList.toggle('mobile-filters-open');
+  $('#mobileFilterBtn')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  $('#mobileFilterBtn').textContent = open ? '×' : '☰';
+  $('#mobileFilterBtn').title = open ? 'Fechar filtros' : 'Abrir filtros';
+});
+
 $('#localBtn').addEventListener('click', () => $('#localFileInput').click());
 $('#localFileInput').addEventListener('change', async e => { const file = e.target.files?.[0]; e.target.value = ''; await openLocalSelected(file); });
 
@@ -1912,7 +1921,7 @@ $('#nextIssueBtn').addEventListener('click', async () => { const next = getNextI
 $('#pageRange').addEventListener('input', e => setPage(Number(e.target.value) - 1));
 $('#pageNumberInput')?.addEventListener('change', e => { const n = Number(e.target.value || 1); setPage(n - 1); });
 $('#pageNumberInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); const n = Number(e.target.value || 1); setPage(n - 1); } });
-$('#loadMoreBtn')?.addEventListener('click', () => { state.renderLimit += 60; render(); });
+$('#loadMoreBtn')?.addEventListener('click', () => { state.renderLimit += performanceProfile().mobile ? 30 : 60; render(); });
 $('#modeBtn').addEventListener('click', async () => {
   if (!state.pages.length) return;
   stopAutoScroll();
@@ -2164,7 +2173,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.4', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.5', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
