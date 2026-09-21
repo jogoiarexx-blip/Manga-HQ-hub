@@ -4,12 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111217" />
-  <meta name="description" content="Leitor local de mangás e HQs em PDF, CBR, CBZ, RAR e ZIP, sem acervo pré-carregado." />
-  <title>Manga HQ Reader v2.3.1</title>
+  <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
+  <title>Manga HQ Reader v2.3.2</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=2.3.1" />
+  <link rel="stylesheet" href="./css/app.css?v=2.3.2" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -51,9 +51,9 @@
       <section class="content">
         <div class="hero">
           <div class="hero-copy">
-            <span class="eyebrow">LEITOR LIMPO • SEM ACERVO</span>
+            <span class="eyebrow">ACERVO CONECTADO • WEBP</span>
             <h1>Mangás e HQs em um leitor só.</h1>
-            <p>Versão sem acervo pré-carregado. Abra seus próprios arquivos PDF, CBR, CBZ, RAR ou ZIP e use o leitor normalmente no PC ou no celular.</p>
+            <p>O Manga HQ Acervo está conectado à biblioteca. Leia as edições WebP diretamente no Hub ou abra seus próprios arquivos PDF, CBR, CBZ, RAR ou ZIP.</p>
             <div class="hero-tags"><span>PDF</span><span>CBR / CBZ / RAR / ZIP</span><span>Arquivos locais</span><span>RTL inteligente</span><span>Progresso automático</span></div>
           </div>
           <div class="stats">
@@ -67,7 +67,7 @@
         <div id="catalogNotice" class="catalog-notice hidden"><strong>Catálogo local</strong><span id="catalogNoticeText"></span></div>
 
         <div id="apiNotice" class="notice hidden">
-          <div><strong>Leitura direta pelo Google Drive</strong><span>Esta versão não possui acervo pré-carregado. Use “Abrir arquivo” para ler seus próprios quadrinhos.</span></div>
+          <div><strong>Leitura direta pelo Google Drive</strong><span>O Manga HQ Acervo está conectado. A biblioteca carrega automaticamente as edições WebP publicadas no acervo.</span></div>
           <button id="noticeSettingsBtn">Configurar</button>
         </div>
 
@@ -221,7 +221,7 @@
 
   <div id="driveModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="driveTitle">
     <div class="modal-card compact">
-      <div class="modal-head"><div><strong id="driveTitle">Fontes da biblioteca</strong><small>Leitor independente, sem acervo conectado</small></div><button id="closeDriveModal" class="icon-btn">×</button></div>
+      <div class="modal-head"><div><strong id="driveTitle">Fontes da biblioteca</strong><small>Acervo WebP conectado ao Hub</small></div><button id="closeDriveModal" class="icon-btn">×</button></div>
       <div class="modal-body"><div id="driveSummary" class="drive-summary"></div><div id="driveRoots" class="drive-roots"></div><div id="externalSources" class="external-sources"></div></div>
     </div>
   </div>
@@ -240,7 +240,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=2.3.1"></script>
-  <script type="module" src="./js/app.js?v=2.3.1"></script>
+  <script src="./config.js?v=2.3.2"></script>
+  <script type="module" src="./js/app.js?v=2.3.2"></script>
 </body>
 </html>
