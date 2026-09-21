@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111217" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga HQ Reader v2.3.2</title>
+  <title>Manga-HQ-hub v0.2.1</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=2.3.2" />
+  <link rel="stylesheet" href="./css/app.css?v=0.2.1" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
   <div id="app">
     <header class="topbar">
       <div class="brand">
-        <img class="brand-logo" src="./logo-manga-hq-reader.png" alt="Manga HQ Reader" />
-        <div class="brand-copy"><strong>Manga HQ Reader</strong><small>Leitor + acervo</small></div>
+        <img class="brand-logo" src="./logo-manga-hq-reader.png" alt="Manga-HQ-hub" />
+        <div class="brand-copy"><strong>Manga-HQ-hub</strong><small>Leitor + acervo</small></div>
       </div>
       <div class="top-actions">
         <button id="localBtn" class="ghost" title="Abrir arquivo do aparelho" aria-label="Abrir arquivo do aparelho">Abrir arquivo</button>
@@ -103,7 +103,8 @@
           <label class="search"><span>⌕</span><input id="searchInput" placeholder="Buscar título, volume, edição..." /></label>
           <select id="sourceSelect" aria-label="Filtrar por fonte">
             <option value="all">Todas as fontes</option>
-            <option value="offline">Offline/local</option>\n            <option value="external-acervo-1">Manga HQ Acervo</option>
+            <option value="offline">Offline/local</option>
+            <option value="external-acervo-1">Manga HQ Acervo</option>
           </select>
           <select id="sortSelect" aria-label="Ordenar biblioteca">
             <option value="name">Nome A–Z</option>
@@ -240,7 +241,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=2.3.2"></script>
-  <script type="module" src="./js/app.js?v=2.3.2"></script>
+  <script src="./config.js?v=0.2.1"></script>
+  <script type="module" src="./js/app.js?v=0.2.1"></script>
 </body>
 </html>
