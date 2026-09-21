@@ -1,22 +1,25 @@
-# Manga HQ Reader — versão sem acervo
+# Manga-HQ-hub v0.2.1
 
-Esta variante mantém o leitor e a interface, mas não inclui nenhum acervo pré-carregado do Google Drive nem fontes externas.
+Hub de mangás e HQs com acervo WebP conectado e leitor integrado.
 
-## O que permanece
+## Versão atual
 
+**0.2.1** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
+
+## Recursos atuais
+
+- acervo WebP conectado ao Hub;
+- leitura direta das edições publicadas no acervo;
 - leitura de PDF, CBR, CBZ, RAR e ZIP;
 - abertura de arquivos locais;
 - modos página, dupla, vertical e webtoon;
-- RTL/LTR;
-- progresso, favoritos, marcadores e biblioteca offline;
+- leitura RTL/LTR;
+- progresso, favoritos e marcadores;
+- biblioteca offline;
 - interface responsiva para PC e celular;
 - PWA e armazenamento local.
 
-## O que foi removido desta variante
+## Acervo conectado
 
-- as cinco bibliotecas configuradas do Google Drive;
-- o catálogo pré-carregado;
-- a fonte externa Batcaverna;
-- os cards e filtros específicos dessas bibliotecas.
-
-A versão completa com Drive continua separada na branch `main`.
+Manga HQ Acervo:
+https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/
