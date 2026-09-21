@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.3',
+  appVersion: '0.2.4',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -160,7 +160,7 @@ function performanceProfile() {
   const hugeComic = Boolean(state.current && extType(state.current)==='comic' && Number(state.current.size||0) > 180*1024*1024);
   return {
     mode, mobile, eco: eco || hugeComic, quality,
-    cacheLimit: (eco || hugeComic) ? 3 : (mobile && !quality ? 8 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))),
+    cacheLimit: (eco || hugeComic) ? 5 : (mobile && !quality ? 8 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))),
     pdfDpr: eco ? 1 : (mobile && !quality ? 1.35 : 2),
     verticalWindow: eco ? 1 : (mobile && !quality ? 2 : 5),
     observerMargin: eco ? 420 : (mobile && !quality ? 700 : 1200),
@@ -988,7 +988,6 @@ function prevPageIndex(page = state.page) {
 function pageStep() { return effectiveMode() === 'spread' ? (state.page <= 0 ? 1 : 2) : 1; }
 function normalizedMode(mode) { return ['page','spread','vertical','webtoon'].includes(mode) ? mode : 'page'; }
 function effectiveMode(mode = state.mode) {
-  if (mode === 'spread' && matchMedia('(max-width: 650px)').matches && !matchMedia('(orientation: landscape)').matches) return 'page';
   return mode;
 }
 function updateReaderPrefsUI() {
@@ -1404,7 +1403,7 @@ async function renderPdfPageMode(token) {
   $('#readerBody').classList.add('page-mode');
   const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
   const bookClass = spread ? ` flipbook-stage${indexes.length > 1 ? ' two-page' : ' cover-only'}${flipbookAnimationClass()}` : '';
-  $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${indexes.map((i, n) => `<div class="pdf-page-mount spread-page ${spread ? `flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}` : ''}" data-pdf-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
+  $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${indexes.map((i, n) => `<div class="pdf-page-mount spread-page ${spread ? `flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}` : ''}" data-pdf-i="${i}"><span class="page-placeholder">Página ${i + 1}</span>${spread ? `<span class="flipbook-page-number">${i + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span>` : ''}</div>`).join('')}</div>`;
   try {
     for (const i of indexes) await renderPdfInto($(`[data-pdf-i="${i}"]`), i, token, false);
   } finally { if (token === state.renderToken) $('#readerLoading').classList.add('hidden'); }
@@ -1465,12 +1464,22 @@ async function getPageUrl(index, expectedToken = state.renderToken) {
 async function prefetchPage(index, expectedToken = state.renderToken) {
   if (index < 0 || index >= state.pages.length || expectedToken !== state.renderToken) return;
   const url = await getPageUrl(index, expectedToken);
-  if (state.archive?.type === 'drive-pages' && expectedToken === state.renderToken && url) {
+  if (['drive-pages','web-pages'].includes(state.archive?.type) && expectedToken === state.renderToken && url) {
     const img = new Image();
     img.decoding = 'async';
     img.fetchPriority = 'low';
     img.src = url;
   }
+}
+
+function prefetchNeighborSpreads(expectedToken = state.renderToken) {
+  if (effectiveMode() !== 'spread' || !performanceProfile().prefetch) return;
+  const candidates = new Set();
+  for (const target of [prevPageIndex(), nextPageIndex()]) {
+    if (target < 0 || target >= state.pages.length) continue;
+    for (const i of spreadIndexes(target)) if (i >= 0 && i < state.pages.length) candidates.add(i);
+  }
+  for (const i of candidates) setTimeout(() => prefetchPage(i, expectedToken).catch(() => {}), 40);
 }
 
 function trimPageCache(center) {
@@ -1539,11 +1548,11 @@ async function renderReaderPages() {
       const zoomStyle = state.zoom === 1 ? '' : `style="width:${Math.round(state.zoom * 100)}%;max-width:none;height:auto"`;
       const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
       const bookClass = spread ? ` flipbook-stage${indexes.length > 1 ? ' two-page' : ' cover-only'}${flipbookAnimationClass()}` : '';
-      $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" ${zoomStyle}></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" ${zoomStyle}>`).join('')}</div>`;
+      $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" ${zoomStyle}>`).join('')}</div>`;
       wirePagedImageErrors(indexes);
       if (performanceProfile().prefetch) {
-        const step = spread ? 2 : 1;
-        [state.page - step, state.page + step].filter(i => i >= 0 && i < state.pages.length).forEach(i => setTimeout(() => prefetchPage(i, token).catch(() => {}), 50));
+        if (spread) prefetchNeighborSpreads(token);
+        else [state.page - 1, state.page + 1].filter(i => i >= 0 && i < state.pages.length).forEach(i => setTimeout(() => prefetchPage(i, token).catch(() => {}), 50));
       }
     } catch (err) {
       if (token === state.renderToken) showReaderError('Falha ao carregar página', err.message);
@@ -1909,7 +1918,6 @@ $('#modeBtn').addEventListener('click', async () => {
   stopAutoScroll();
   const modes = ['page','spread','vertical','webtoon'];
   state.mode = modes[(modes.indexOf(normalizedMode(state.mode)) + 1) % modes.length];
-  if (state.mode === 'spread' && effectiveMode() !== 'spread') toast('Página dupla ficará ativa ao usar tela maior ou celular na horizontal.');
   persistCurrentReaderPrefs(); updateReaderPrefsUI();
   await renderReaderPages();
 });
@@ -2156,7 +2164,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.3', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.4', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
