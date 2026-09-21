@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#111217" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.2.1</title>
+  <title>Manga-HQ-hub v0.2.2</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.2.1" />
+  <link rel="stylesheet" href="./css/app.css?v=0.2.2" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -54,7 +54,7 @@
             <span class="eyebrow">ACERVO CONECTADO • WEBP</span>
             <h1>Mangás e HQs em um leitor só.</h1>
             <p>O Manga HQ Acervo está conectado à biblioteca. Leia as edições WebP diretamente no Hub ou abra seus próprios arquivos PDF, CBR, CBZ, RAR ou ZIP.</p>
-            <div class="hero-tags"><span>PDF</span><span>CBR / CBZ / RAR / ZIP</span><span>Arquivos locais</span><span>RTL inteligente</span><span>Progresso automático</span></div>
+            <div class="hero-tags"><span>PDF</span><span>CBR / CBZ / RAR / ZIP</span><span>Arquivos locais</span><span>Flipbook 2 páginas</span><span>RTL inteligente</span><span>Progresso automático</span></div>
           </div>
           <div class="stats">
             <div><b id="itemCount">0</b><span>arquivos</span></div>
@@ -184,7 +184,7 @@
         <label class="field"><span>Google Drive API Key</span><input id="apiKeyInput" type="password" autocomplete="off" placeholder="Cole sua chave aqui" /></label>
         <p class="help">As pastas públicas já estão configuradas. HQs WebP presentes no catálogo podem ser lidas sem chave. A Google Drive API Key serve para descobrir novos arquivos, atualizar as bibliotecas e melhorar a compatibilidade com PDFs/arquivos compactados. Restrinja a chave ao endereço do seu GitHub Pages e habilite somente a Google Drive API.</p>
         <div class="settings-grid">
-          <label class="field"><span>Modo padrão</span><select id="defaultModeSelect"><option value="page">Página única</option><option value="spread">Página dupla</option><option value="vertical">Vertical contínuo</option><option value="webtoon">Webtoon</option></select></label>
+          <label class="field"><span>Modo padrão</span><select id="defaultModeSelect"><option value="spread">Flipbook (2 páginas)</option><option value="page">Página única</option><option value="vertical">Vertical contínuo</option><option value="webtoon">Webtoon</option></select></label>
           <label class="field"><span>Direção padrão</span><select id="directionSelect"><option value="ltr">Esquerda → direita</option><option value="rtl">Direita → esquerda (mangá)</option></select></label>
           <label class="field"><span>Desempenho</span><select id="performanceSelect"><option value="auto">Automático</option><option value="eco">Econômico / celular fraco</option><option value="quality">Qualidade máxima</option></select><small id="performanceHint" class="field-hint"></small></label>
           <label class="field"><span>Velocidade da rolagem automática</span><select id="autoScrollSpeedSelect"><option value="28">Lenta</option><option value="46">Normal</option><option value="70">Rápida</option><option value="100">Muito rápida</option></select></label>
@@ -241,7 +241,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.2.1"></script>
-  <script type="module" src="./js/app.js?v=0.2.1"></script>
+  <script src="./config.js?v=0.2.2"></script>
+  <script type="module" src="./js/app.js?v=0.2.2"></script>
 </body>
 </html>
