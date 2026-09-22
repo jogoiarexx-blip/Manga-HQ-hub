@@ -79,7 +79,7 @@ const state = {
   items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
-  verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, largePending: null,
+  verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
   readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: ''
 };
 
@@ -325,8 +325,14 @@ function pdfRenderCaps(vertical = false, index = state.page) {
 
   const isCurrent = Number(index) === Number(state.page);
   if (vertical) {
-    if (mode === 'sharp' && isCurrent) return { dprCap:Math.min(deviceDpr, 1.65), pixelBudget:7000000 };
-    return { dprCap:Math.min(deviceDpr, p.smallMobile ? 1.25 : 1.4), pixelBudget:p.smallMobile ? 4700000 : 5800000 };
+    if (mode === 'sharp') {
+      return isCurrent
+        ? { dprCap:Math.min(deviceDpr, p.smallMobile ? 1.8 : 2), pixelBudget:p.smallMobile ? 8000000 : 9500000 }
+        : { dprCap:Math.min(deviceDpr, p.smallMobile ? 1.25 : 1.4), pixelBudget:p.smallMobile ? 4300000 : 5200000 };
+    }
+    return isCurrent
+      ? { dprCap:Math.min(deviceDpr, p.smallMobile ? 1.55 : 1.7), pixelBudget:p.smallMobile ? 6200000 : 7600000 }
+      : { dprCap:Math.min(deviceDpr, p.smallMobile ? 1.15 : 1.3), pixelBudget:p.smallMobile ? 3900000 : 4800000 };
   }
   if (mode === 'sharp') {
     return { dprCap:Math.min(deviceDpr, 2), pixelBudget:p.smallMobile ? 9000000 : 11000000 };
@@ -2224,6 +2230,8 @@ async function renderPdfInto(container, index, token, vertical = false) {
   canvas.style.width = `${Math.floor(viewport.width)}px`;
   canvas.style.height = `${Math.floor(viewport.height)}px`;
   canvas.setAttribute('aria-label', `Página ${index + 1}`);
+  canvas.dataset.renderDpr = dpr.toFixed(3);
+  canvas.dataset.pdfQuality = pdfQualityMode();
   const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
   if (ctx) { ctx.imageSmoothingEnabled = true; try { ctx.imageSmoothingQuality = 'high'; } catch {} }
   const renderContext = { canvasContext: ctx, viewport, transform: dpr === 1 ? null : [dpr, 0, 0, dpr, 0, 0] };
@@ -2254,18 +2262,45 @@ function flipbookAnimationClass() {
 }
 
 async function renderPdfPageMode(token) {
+  const root = $('#readerBody');
   $('#readerFooter').classList.remove('hidden');
-  $('#readerLoading').classList.remove('hidden');
   const spread = effectiveMode() === 'spread';
   const indexes = spread ? spreadIndexes() : [state.page];
+  const canStage = Boolean(
+    performanceProfile().mobile &&
+    !spread &&
+    root?.querySelector(':scope > .page-stage .pdf-page-canvas') &&
+    root?.classList.contains('page-mode')
+  );
+
+  if (!canStage) $('#readerLoading').classList.remove('hidden');
   $('#loadingText').textContent = spread ? `Renderizando PDF • páginas ${indexes.map(i => i + 1).join('–')}…` : `Renderizando PDF • página ${state.page + 1}…`;
-  releaseReaderVisuals();
-  $('#readerBody').classList.add('page-mode');
+  root.classList.add('page-mode');
+
   const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
   const bookClass = spread ? ` flipbook-stage${flipbookLayoutClass(indexes)}${flipbookAnimationClass()}` : '';
-  $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${indexes.map((i, n) => `<div class="pdf-page-mount spread-page ${spread ? `flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}` : ''}" data-pdf-i="${i}"><span class="page-placeholder">Página ${i + 1}</span>${spread ? `<span class="flipbook-page-number">${i + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span>` : ''}</div>`).join('')}</div>`;
+  const stage = document.createElement('div');
+  stage.className = `page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}`;
+  stage.innerHTML = indexes.map((i, n) => `<div class="pdf-page-mount spread-page ${spread ? `flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}` : ''}" data-pdf-i="${i}"><span class="page-placeholder">Página ${i + 1}</span>${spread ? `<span class="flipbook-page-number">${i + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span>` : ''}</div>`).join('');
+
+  let oldStages = [];
+  if (canStage) {
+    oldStages = [...root.querySelectorAll(':scope > .page-stage')];
+    stage.classList.add('pdf-stage-staging');
+    root.appendChild(stage);
+    root.classList.add('pdf-stage-pending');
+  } else {
+    releaseReaderVisuals();
+    root.replaceChildren(stage);
+  }
+
   try {
-    for (const i of indexes) await renderPdfInto($(`[data-pdf-i="${i}"]`), i, token, false);
+    for (const i of indexes) {
+      const mount = stage.querySelector(`[data-pdf-i="${i}"]`);
+      await renderPdfInto(mount, i, token, false);
+      if (token !== state.renderToken) return;
+    }
+
     if (spread && token === state.renderToken) {
       const corrected = spreadIndexes();
       if (corrected.join(',') !== indexes.join(',')) {
@@ -2273,7 +2308,21 @@ async function renderPdfPageMode(token) {
         return;
       }
     }
-  } finally { if (token === state.renderToken) $('#readerLoading').classList.add('hidden'); }
+
+    if (canStage && token === state.renderToken && stage.isConnected) {
+      for (const old of oldStages) {
+        old.querySelectorAll('canvas').forEach(canvas => { try { canvas.width=1; canvas.height=1; } catch {} });
+      }
+      stage.classList.remove('pdf-stage-staging');
+      stage.classList.add('pdf-stage-enter');
+      root.replaceChildren(stage);
+      state.pdfLastStagedPage = state.page;
+      requestAnimationFrame(() => requestAnimationFrame(() => stage.classList.remove('pdf-stage-enter')));
+    }
+  } finally {
+    root.classList.remove('pdf-stage-pending');
+    if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
+  }
 }
 
 async function renderPdfVerticalMode(token) {
@@ -2281,7 +2330,7 @@ async function renderPdfVerticalMode(token) {
   $('#readerBody').classList.remove('page-mode');
   $('#readerBody').innerHTML = `<div class="vertical-pages pdf-vertical ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot pdf-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
   setupVerticalObserver();
-  requestAnimationFrame(() => restoreVerticalPosition(true));
+  requestAnimationFrame(() => { restoreVerticalPosition(true); schedulePdfVerticalQualityUpgrade(state.page); });
 }
 
 async function getPageUrl(index, expectedToken = state.renderToken) {
@@ -2591,6 +2640,24 @@ function restoreVerticalPosition(force = false) {
   const ratio = Math.max(0, Math.min(1, Number(restore.ratio || 0)));
   root.scrollTop = Math.max(0, slot.offsetTop + ratio * slot.offsetHeight);
 }
+function schedulePdfVerticalQualityUpgrade(index) {
+  clearTimeout(state.pdfVerticalUpgradeTimer);
+  if (extType(state.current || {}) !== 'pdf' || !isVerticalMode() || !state.pdfDoc || pdfQualityMode() === 'eco') return;
+  state.pdfVerticalUpgradeTimer = setTimeout(() => {
+    state.pdfVerticalUpgradeTimer = 0;
+    if (Number(index) !== Number(state.page) || !state.pdfDoc || !isVerticalMode()) return;
+    const slot = $(`.page-slot[data-i="${index}"]`);
+    const canvas = slot?.querySelector('.pdf-page-canvas');
+    if (!slot || slot.dataset.loaded !== '1' || !canvas) return;
+    const target = pdfRenderCaps(true, index);
+    const renderedDpr = Number(canvas.dataset.renderDpr || 0);
+    if (renderedDpr >= target.dprCap - .08) return;
+    renderPdfInto(slot, index, state.renderToken, true).catch(err => {
+      if (err?.name !== 'RenderingCancelledException') console.warn('Falha ao melhorar página PDF em foco:', err);
+    });
+  }, 220);
+}
+
 function updateVerticalPosition() {
   if (!isVerticalMode() || !state.pages.length) return;
   const rootRect = $('#readerBody').getBoundingClientRect(); let best = state.page; let dist = Infinity;
@@ -2602,6 +2669,7 @@ function updateVerticalPosition() {
     state.page = best;
     state.verticalRestore = null;
     updateProgress(); updatePageControls();
+    if (extType(state.current || {}) === 'pdf') schedulePdfVerticalQualityUpgrade(best);
   }
   scheduleVerticalProgressSave();
 }
@@ -2689,7 +2757,7 @@ async function cleanupReaderData() {
   state.pageUrls.clear(); state.pageUse.clear();
   if (state.pdfObjectUrl) { URL.revokeObjectURL(state.pdfObjectUrl); state.pdfObjectUrl = ''; }
   state.pdfRenderTask?.cancel?.(); state.pdfRenderTask = null;
-  for (const task of state.pdfVerticalTasks.values()) task?.cancel?.(); state.pdfVerticalTasks.clear(); state.pdfWarmupSeq++; clearPdfZoomPreview();
+  for (const task of state.pdfVerticalTasks.values()) task?.cancel?.(); state.pdfVerticalTasks.clear(); state.pdfWarmupSeq++; clearTimeout(state.pdfVerticalUpgradeTimer); state.pdfVerticalUpgradeTimer=0; state.pdfLastStagedPage=-1; clearPdfZoomPreview();
   if (state.pdfDoc) { await state.pdfDoc.destroy().catch(() => {}); state.pdfDoc = null; }
   state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
 }
@@ -3338,7 +3406,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.11', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.12', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
