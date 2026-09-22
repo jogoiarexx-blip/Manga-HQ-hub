@@ -1,6 +1,6 @@
 // Manga-HQ-hub — acervo WebP conectado ao Hub.
 window.MHQR_CONFIG = {
-  appVersion: '0.3.7',
+  appVersion: '0.3.5',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -19,6 +19,13 @@ window.MHQR_CONFIG = {
       siteUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-2/',
       catalogUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-2/catalogo.json',
       note: 'Acervo 2 em PDF com capas WebP e leitura integrada pelo PDF.js.'
+    },
+    {
+      id: 'acervo-marvel',
+      name: 'Manga HQ Acervo Marvel',
+      siteUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/',
+      catalogUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/catalogo.json',
+      note: 'Acervo Marvel em PDF com capas WebP e leitura integrada pelo PDF.js.'
     }
   ],
   driveApiKey: '',
