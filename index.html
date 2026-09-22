@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.3.7 -->
+<!-- Manga-HQ-hub deploy v0.3.9 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -11,12 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.3.8</title>
+  <title>Manga-HQ-hub v0.3.9</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.3.8" />
-  <link rel="stylesheet" href="./css/reader.css?v=0.3.8" />
+  <link rel="stylesheet" href="./css/app.css?v=0.3.9" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.3.9" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -166,6 +166,15 @@
       <label><span>Brilho <b id="brightnessValue">100%</b></span><input id="brightnessRange" type="range" min="60" max="140" value="100" /></label>
       <label><span>Contraste <b id="contrastValue">100%</b></span><input id="contrastRange" type="range" min="60" max="170" value="100" /></label>
       <label><span>Sépia <b id="sepiaValue">0%</b></span><input id="sepiaRange" type="range" min="0" max="80" value="0" /></label>
+      <label class="low-res-control">
+        <span>Baixa resolução</span>
+        <select id="lowResModeSelect">
+          <option value="off">Desligado</option>
+          <option value="auto" selected>Automático</option>
+          <option value="strong">Forte / scan borrado</option>
+        </select>
+        <small id="lowResStatus">Auto ativo • só melhora páginas pequenas.</small>
+      </label>
       <div class="reader-display-actions"><button id="nightProfileBtn" class="ghost">☾ Perfil noturno</button><button id="resetDisplayBtn" class="ghost">↺ Restaurar</button></div>
     </div>
     <aside id="thumbDrawer" class="thumb-drawer hidden" aria-label="Miniaturas das páginas">
@@ -253,7 +262,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.3.8"></script>
-  <script type="module" src="./js/app.js?v=0.3.8"></script>
+  <script src="./config.js?v=0.3.9"></script>
+  <script type="module" src="./js/app.js?v=0.3.9"></script>
 </body>
 </html>
