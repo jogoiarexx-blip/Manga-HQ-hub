@@ -1457,29 +1457,85 @@ async function openDrivePages(item, token) {
   }
 }
 
-async function renderThumbDrawer() {
-  const grid=$('#thumbGrid'); if (!grid || !state.pages.length) return;
-  const token=++state.thumbRenderToken; const max=Math.min(state.pages.length, performanceProfile().mobile ? 60 : 120);
-  grid.innerHTML=Array.from({length:max},(_,i)=>`<button class="thumb-item ${i===state.page?'active':''}" data-thumb-page="${i}"><span>${i+1}</span><div class="thumb-preview" data-thumb-preview="${i}"></div></button>`).join('') + (state.pages.length>max ? `<p class="thumb-limit">Mostrando ${max} de ${state.pages.length} páginas para economizar memória.</p>`:'');
-  const isPdf=Boolean(state.pdfDoc);
-  for (let i=0;i<max;i++) {
-    if (token!==state.thumbRenderToken || $('#thumbDrawer')?.classList.contains('hidden')) break;
-    const mount=$(`[data-thumb-preview="${i}"]`); if (!mount) continue;
-    try {
-      if (isPdf) {
-        const page=await state.pdfDoc.getPage(i+1); const base=page.getViewport({scale:1}); const scale=Math.min(1,100/base.width); const vp=page.getViewport({scale});
-        const c=document.createElement('canvas'); c.width=Math.max(1,Math.floor(vp.width)); c.height=Math.max(1,Math.floor(vp.height)); await page.render({canvasContext:c.getContext('2d'),viewport:vp}).promise; mount.appendChild(c);
-      } else {
-        const entry = state.archive?.entries?.[i];
-        const url = state.archive?.type === 'drive-pages' && entry?.id ? drivePagePublicUrl(entry, 'w280') : await getPageUrl(i);
-        const img=document.createElement('img'); img.src=url; img.alt=''; img.loading='lazy'; img.decoding='async'; mount.appendChild(img);
+async function loadThumbPreview(mount, index, token) {
+  if (!mount?.isConnected || token !== state.thumbRenderToken || mount.dataset.loaded === '1') return;
+  mount.dataset.loaded = '1';
+  try {
+    if (state.pdfDoc) {
+      const page = await state.pdfDoc.getPage(index + 1);
+      if (token !== state.thumbRenderToken || !mount.isConnected) return;
+      const base = page.getViewport({scale:1});
+      const scale = Math.min(1, 100 / base.width);
+      const vp = page.getViewport({scale});
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(vp.width));
+      canvas.height = Math.max(1, Math.floor(vp.height));
+      const task = page.render({canvasContext:canvas.getContext('2d'), viewport:vp});
+      await task.promise;
+      if (token !== state.thumbRenderToken || !mount.isConnected) {
+        canvas.width = 1; canvas.height = 1; return;
       }
-    } catch { mount.textContent='—'; }
-    if (i%8===7) await new Promise(r=>setTimeout(r,0));
+      mount.appendChild(canvas);
+    } else {
+      const entry = state.archive?.entries?.[index];
+      const url = state.archive?.type === 'drive-pages' && entry?.id ? drivePagePublicUrl(entry, 'w280') : await getPageUrl(index);
+      if (token !== state.thumbRenderToken || !mount.isConnected) return;
+      const img = document.createElement('img');
+      img.src = url; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+      mount.appendChild(img);
+    }
+  } catch {
+    if (mount?.isConnected) mount.textContent = '—';
   }
 }
-function openThumbDrawer(){ $('#thumbDrawer')?.classList.remove('hidden'); renderThumbDrawer().catch(()=>{}); }
-function closeThumbDrawer(){ state.thumbRenderToken++; $('#thumbDrawer')?.classList.add('hidden'); }
+function pumpThumbQueue(token) {
+  const limit = performanceProfile().mobile ? 2 : 4;
+  while (state.thumbActive < limit && state.thumbQueue.length && token === state.thumbRenderToken) {
+    const job = state.thumbQueue.shift();
+    if (!job?.mount?.isConnected || job.mount.dataset.queued === 'done') continue;
+    job.mount.dataset.queued = 'done';
+    state.thumbActive++;
+    loadThumbPreview(job.mount, job.index, token).finally(() => {
+      state.thumbActive = Math.max(0, state.thumbActive - 1);
+      pumpThumbQueue(token);
+    });
+  }
+}
+function queueThumbPreview(mount, index, token) {
+  if (!mount?.isConnected || mount.dataset.queued || token !== state.thumbRenderToken) return;
+  mount.dataset.queued = '1';
+  state.thumbQueue.push({ mount, index });
+  pumpThumbQueue(token);
+}
+async function renderThumbDrawer() {
+  const grid = $('#thumbGrid'); if (!grid || !state.pages.length) return;
+  const profile = performanceProfile();
+  const token = ++state.thumbRenderToken;
+  const max = Math.min(state.pages.length, profile.mobile ? 160 : 300);
+  state.thumbObserver?.disconnect?.();
+  state.thumbQueue = []; state.thumbActive = 0;
+  grid.innerHTML = Array.from({length:max},(_,i)=>`<button class="thumb-item ${i===state.page?'active':''}" data-thumb-page="${i}"><span>${i+1}</span><div class="thumb-preview" data-thumb-preview="${i}"></div></button>`).join('') + (state.pages.length>max ? `<p class="thumb-limit">Mostrando ${max} de ${state.pages.length} páginas. As miniaturas são carregadas somente quando se aproximam da tela.</p>` : '');
+  const root = $('#thumbDrawer');
+  state.thumbObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      state.thumbObserver?.unobserve(entry.target);
+      const index = Number(entry.target.dataset.thumbPreview);
+      if (Number.isFinite(index)) queueThumbPreview(entry.target, index, token);
+    }
+  }, { root, rootMargin: profile.mobile ? '360px 0px' : '520px 0px', threshold:0.01 });
+  $$('.thumb-preview', grid).forEach(mount => state.thumbObserver.observe(mount));
+}
+function openThumbDrawer() {
+  $('#thumbDrawer')?.classList.remove('hidden');
+  renderThumbDrawer().catch(()=>{});
+}
+function closeThumbDrawer() {
+  state.thumbRenderToken++;
+  state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
+  state.thumbQueue = []; state.thumbActive = 0;
+  $('#thumbDrawer')?.classList.add('hidden');
+}
 function showReaderError(title, message, offerLocal = false) {
   $('#readerFooter').classList.add('hidden');
   $('#readerBody').innerHTML = `<div class="reader-error"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p><div class="reader-error-actions">
@@ -1871,6 +1927,7 @@ async function setPage(n) {
 
 async function cleanupReaderData() {
   closeThumbDrawer();
+  state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
   stopAutoScroll();
   state.readerDownloadController?.abort();
   state.readerDownloadController = null;
