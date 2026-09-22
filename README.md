@@ -1,47 +1,44 @@
-# Manga-HQ-hub v0.3.5
+# Manga-HQ-hub v0.3.6
 
-Leitor/PWA de mangás e HQs com dois acervos externos integrados, suporte a páginas WebP, PDF, CBR, CBZ, RAR e ZIP.
+Leitor/PWA de mangás e HQs com catálogo unificado, atalhos alfabéticos e leitor mobile em tela cheia.
 
-## v0.3.5 — estabilidade dos dois acervos
+## v0.3.6 — catálogo A–Z e leitura mobile maior
 
-- Corrigido o título/comentário de deploy e todos os parâmetros de versão do HTML.
-- Corrigido `config.js` que ainda era carregado com query antiga no HTML.
-- Filtro **Fonte** agora é gerado dinamicamente e mostra Acervo 1, Acervo 2 e contagens reais.
-- Acervos externos são carregados em paralelo.
-- Se um catálogo remoto atualiza com itens removidos, os itens antigos não ficam mais presos como HQs fantasmas.
-- Se apenas um acervo falhar, somente ele usa o último cache; o outro continua atualizado.
-- Status da biblioteca mostra contagem separada por acervo.
-- Busca também considera coleção, fonte e número da edição.
-- Geração automática de capa PDF limitada a 1 tarefa no celular e 2 no desktop.
-- Capas PDF geradas usam cache LRU para evitar acúmulo de Blob URLs.
-- Service Worker aceita fallback de assets versionados ignorando query antiga quando necessário.
-- Capas/imagens remotas do GitHub usam cache LRU limitado.
-- Manifestos JSON em `raw.githubusercontent.com` usam network-first.
-- PDFs remotos não entram automaticamente no Cache Storage, evitando duplicação de arquivos grandes.
-- Regra de imagens dos acervos foi generalizada para Acervo 1, Acervo 2 e futuros acervos com o mesmo padrão.
+### Catálogo alfabético
 
-## Acervos atuais
+- O catálogo padrão continua em **Nome A–Z**.
+- Nova barra **# A B C ... Z** com atalhos para cada letra.
+- Cada letra mostra quantos títulos existem naquele ponto do catálogo.
+- Letras sem títulos ficam desativadas.
+- Ao tocar numa letra, o Hub muda para A–Z, carrega automaticamente a parte necessária do catálogo e rola até aquela seção.
+- Separadores A, B, C... aparecem dentro da grade.
+- O índice respeita filtros de fonte, categoria e busca.
+- A busca considera título, coleção, número da edição e nome do acervo.
 
-- **Manga HQ Acervo 1:** WebP e PDF.
-- **Manga HQ Acervo 2:** PDF com capas WebP.
-- As fontes são configuradas em `config.js` e aparecem automaticamente no seletor da biblioteca.
+### PDF e WebP
 
-## Leitor mobile
+- O cálculo do PDF usa praticamente toda a largura e altura disponíveis no celular.
+- PDF e WebP compartilham a mesma área full-bleed.
+- Flipbook continua com duas páginas quando apropriado.
+- Página única usa o maior tamanho possível sem cortar a imagem.
+- Vertical/Webtoon usam 100% da largura no celular.
+- Panorâmicas continuam detectadas automaticamente.
 
-- Página única, Flipbook, Vertical e Webtoon.
-- Duplo toque e pinch zoom.
-- Opção de manter zoom entre páginas.
-- Detecção de páginas panorâmicas.
-- Fila controlada de prefetch.
-- Restauração precisa da leitura Vertical/Webtoon.
-- Botão Voltar do Android fecha o leitor primeiro.
-- Liberação de blobs distantes ao mandar o app para segundo plano.
+### Celular em tela cheia
 
-## Offline
+- O leitor passa a ocupar **100dvw × 100dvh**.
+- Barra superior e rodapé deixam de reduzir a área da página e passam a ficar sobrepostos.
+- Título some quando os controles estão fechados.
+- Fechar e menu continuam acessíveis sobre a página.
+- Controles somem mais rapidamente após troca de página.
+- Safe areas do Android/iPhone são respeitadas.
+- Imersivo e tela cheia do navegador continuam disponíveis.
 
-- HQs WebP podem ser salvas página a página.
-- PDFs/CBR/CBZ/RAR podem ser salvos quando a origem permite CORS/download.
-- PDFs externos não são duplicados pelo Service Worker; o modo offline explícito usa o armazenamento do app.
+## Acervos
+
+- Manga HQ Acervo 1.
+- Manga HQ Acervo 2.
+- As fontes carregam em paralelo e aparecem no seletor dinamicamente.
 
 ## Validação
 
