@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.6',
+  appVersion: '0.2.7',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -74,7 +74,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1062,6 +1062,8 @@ async function openItem(item, forceLarge = false) {
   $('#reader')?.classList.toggle('trim-margins', state.trimMargins);
   $('#reader').classList.remove('hidden'); $('#reader').setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
+  state.readerViewportW = Math.round($('#readerBody')?.clientWidth || innerWidth);
+  state.readerViewportH = Math.round($('#readerBody')?.clientHeight || innerHeight);
   $('#readerTitle').textContent = item.name; $('#readerMeta').textContent = `${bytes(item.size)}${item.offline ? ' • OFFLINE' : ''}`;
   updateOfflineCurrentButton();
   setReaderButtons(type);
@@ -1572,6 +1574,10 @@ function wirePagedImageErrors(indexes) {
 }
 async function renderReaderPages() {
   if (!state.pages.length) return;
+  const reader = $('#reader');
+  reader?.classList.toggle('reader-mode-page', effectiveMode() === 'page');
+  reader?.classList.toggle('reader-mode-spread', effectiveMode() === 'spread');
+  reader?.classList.toggle('reader-mode-vertical', isVerticalMode());
   if (effectiveMode() === 'spread') state.page = spreadBaseIndex(state.page);
   const token = ++state.renderToken;
   stopVerticalObserver();
@@ -1602,8 +1608,16 @@ async function renderReaderPages() {
       const zoomStyle = state.zoom === 1 ? '' : `style="width:${Math.round(state.zoom * 100)}%;max-width:none;height:auto"`;
       const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
       const bookClass = spread ? ` flipbook-stage${indexes.length > 1 ? ' two-page' : (isWidePage(indexes[0]) ? ' single-wide' : ' cover-only')}${flipbookAnimationClass()}` : '';
-      $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}>`).join('')}</div>`;
+      $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}>`).join('')}</div>`;
       wirePagedImageErrors(indexes);
+      const visibleImages = [...$('#readerBody').querySelectorAll('.page-stage img')];
+      if (visibleImages.length) {
+        await Promise.race([
+          Promise.allSettled(visibleImages.map(img => typeof img.decode === 'function' ? img.decode() : Promise.resolve())),
+          new Promise(resolve => setTimeout(resolve, performanceProfile().mobile ? 180 : 260))
+        ]);
+        if (token !== state.renderToken) return;
+      }
       if (performanceProfile().prefetch) {
         if (spread) prefetchNeighborSpreads(token);
         else { const p=performanceProfile(); const targets=p.prefetchBothDirections?[state.page-1,state.page+1]:[state.page+1]; targets.filter(i=>i>=0&&i<state.pages.length).forEach(i=>scheduleReaderPrefetch(()=>prefetchPage(i,token).catch(()=>{}))); }
@@ -1741,7 +1755,10 @@ async function setPage(n) {
   state.pdfRenderTask?.cancel?.();
   state.flipDirection = target > current ? 'next' : target < current ? 'prev' : '';
   state.page = target;
+  state.zoom = 1;
+  $('#readerBody')?.classList.remove('is-zoomed');
   await renderReaderPages();
+  resetPagedScrollPosition();
   if (requestId === state.pageSetSeq) state.flipDirection = '';
 }
 
@@ -1751,7 +1768,7 @@ async function cleanupReaderData() {
   state.readerDownloadController?.abort();
   state.readerDownloadController = null;
   stopVerticalObserver();
-  state.renderToken++; state.pageSetSeq++;
+  state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
@@ -1983,8 +2000,10 @@ $('#modeBtn').addEventListener('click', async () => {
   stopAutoScroll();
   const modes = ['page','spread','vertical','webtoon'];
   state.mode = modes[(modes.indexOf(normalizedMode(state.mode)) + 1) % modes.length];
+  state.zoom = 1; $('#readerBody')?.classList.remove('is-zoomed');
   persistCurrentReaderPrefs(); updateReaderPrefsUI();
   await renderReaderPages();
+  resetPagedScrollPosition();
 });
 $('#thumbsBtn')?.addEventListener('click', openThumbDrawer);
 $('#closeThumbsBtn')?.addEventListener('click', closeThumbDrawer);
@@ -2009,9 +2028,44 @@ $('#directionBtn').addEventListener('click', async () => {
   if (state.pages.length && effectiveMode() === 'spread') await renderReaderPages();
   toast(state.direction === 'rtl' ? 'Modo mangá: avance tocando à esquerda.' : 'Leitura ocidental: avance tocando à direita.');
 });
+function applyImageZoomWithoutRender() {
+  if (!isPagedMode() || !state.pages.length || extType(state.current || {}) === 'pdf') return false;
+  const root = $('#readerBody');
+  const stage = root?.querySelector('.page-stage');
+  if (!stage) return false;
+  const zoom = Math.round(state.zoom * 100);
+  cancelAnimationFrame(state.imageZoomRaf || 0);
+  state.imageZoomRaf = requestAnimationFrame(() => {
+    stage.querySelectorAll(':scope > img, .flipbook-page > img').forEach(img => {
+      if (state.zoom === 1) {
+        img.style.removeProperty('width');
+        img.style.removeProperty('max-width');
+        img.style.removeProperty('height');
+      } else {
+        img.style.width = `${zoom}%`;
+        img.style.maxWidth = 'none';
+        img.style.height = 'auto';
+      }
+    });
+    root.classList.toggle('is-zoomed', state.zoom > 1.01);
+  });
+  return true;
+}
+function resetPagedScrollPosition() {
+  const root = $('#readerBody');
+  if (!root || !isPagedMode()) return;
+  root.scrollLeft = 0;
+  root.scrollTop = 0;
+}
+
 async function setZoom(value) {
-  state.zoom = Math.max(.6, Math.min(3, Math.round(value * 10) / 10)); updateReaderPrefsUI();
-  if (isPagedMode() && state.pages.length) await renderReaderPages();
+  const next = Math.max(.6, Math.min(3, Math.round(value * 10) / 10));
+  if (next === state.zoom) return;
+  state.zoom = next;
+  updateReaderPrefsUI();
+  if (!isPagedMode() || !state.pages.length) return;
+  if (applyImageZoomWithoutRender()) return;
+  await renderReaderPages();
 }
 $('#zoomOutBtn').addEventListener('click', () => setZoom(state.zoom - .2));
 $('#zoomInBtn').addEventListener('click', () => setZoom(state.zoom + .2));
@@ -2146,7 +2200,7 @@ async function finishFlipDrag(clientX, clientY = null) {
 }
 $('#readerBody').addEventListener('pointerdown', e => {
   if (e.pointerType === 'touch' || effectiveMode() !== 'spread' || !state.pages.length || state.zoom > 1.01 || e.target.closest('button,a')) return;
-  const stage = e.target.closest('.flipbook-stage');
+  const stage = e.target.closest('.flipbook-stage:not(.single-wide)');
   if (!stage) return;
   state.flipDrag = { startX:e.clientX, startY:e.clientY, dx:0, time:Date.now(), pointerId:e.pointerId };
   try { $('#readerBody').setPointerCapture(e.pointerId); } catch {}
@@ -2187,7 +2241,7 @@ $('#readerBody').addEventListener('touchstart', e => {
   }
   if (e.touches.length !== 1 || state.zoom > 1.01) return;
   const t = e.touches[0]; state.touchStart = { x: t.clientX, y: t.clientY, time: Date.now() };
-  if (effectiveMode() === 'spread' && e.target.closest('.flipbook-stage')) state.flipDrag = { startX:t.clientX, startY:t.clientY, dx:0, time:Date.now(), pointerId:null };
+  if (effectiveMode() === 'spread' && e.target.closest('.flipbook-stage:not(.single-wide)')) state.flipDrag = { startX:t.clientX, startY:t.clientY, dx:0, time:Date.now(), pointerId:null };
 }, { passive: true });
 $('#readerBody').addEventListener('touchmove', e => {
   if (state.pinch && e.touches.length === 2) {
@@ -2221,7 +2275,8 @@ $('#readerBody').addEventListener('touchend', e => {
   }
   if (!start || !isPagedMode() || !state.pages.length || state.zoom > 1.01) return;
   const dx = t.clientX - start.x, dy = t.clientY - start.y;
-  if (Date.now() - start.time > 700 || Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+  const minSwipe = effectiveMode() === 'page' ? 38 : 55;
+  if (Date.now() - start.time > 700 || Math.abs(dx) < minSwipe || Math.abs(dx) < Math.abs(dy) * 1.18) return;
   const swipeLeft = dx < 0;
   const next = state.direction === 'rtl' ? !swipeLeft : swipeLeft;
   state.lastSwipeAt = Date.now();
@@ -2229,7 +2284,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.6', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.7', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -2267,7 +2322,21 @@ $('#installBtn').addEventListener('click', async () => {
 
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') cleanupVerticalSlots(true); });
 let readerResizeTimer = 0;
-window.addEventListener('resize', () => { if ($('#reader').classList.contains('hidden') || !state.pages.length) return; clearTimeout(readerResizeTimer); readerResizeTimer = setTimeout(() => renderReaderPages().catch(() => {}), 180); });
+function handleReaderViewportChange() {
+  if ($('#reader').classList.contains('hidden') || !state.pages.length) return;
+  const root = $('#readerBody');
+  const width = Math.round(root?.clientWidth || innerWidth);
+  const height = Math.round(root?.clientHeight || innerHeight);
+  const widthChanged = Math.abs(width - Number(state.readerViewportW || 0)) >= 20;
+  const heightChanged = Math.abs(height - Number(state.readerViewportH || 0)) >= 90;
+  state.readerViewportW = width; state.readerViewportH = height;
+  if (!widthChanged && !heightChanged) return;
+  if (extType(state.current || {}) !== 'pdf') return;
+  clearTimeout(readerResizeTimer);
+  readerResizeTimer = setTimeout(() => renderReaderPages().catch(() => {}), 240);
+}
+window.addEventListener('resize', handleReaderViewportChange, { passive:true });
+window.visualViewport?.addEventListener?.('resize', handleReaderViewportChange, { passive:true });
 
 if (storageGet(LS.theme) === 'light') document.documentElement.classList.add('light');
 setNetworkStatus();
