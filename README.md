@@ -1,44 +1,38 @@
-# Manga-HQ-hub v0.3.6
+# Manga-HQ-hub v0.3.7
 
-Leitor/PWA de mangás e HQs com catálogo unificado, atalhos alfabéticos e leitor mobile em tela cheia.
+Leitor/PWA de mangás e HQs com catálogo A–Z, múltiplos acervos e leitura otimizada para celular.
 
-## v0.3.6 — catálogo A–Z e leitura mobile maior
+## v0.3.7 — navegação A–Z inteligente e leitor sem barras
 
-### Catálogo alfabético
+### Catálogo
 
-- O catálogo padrão continua em **Nome A–Z**.
-- Nova barra **# A B C ... Z** com atalhos para cada letra.
-- Cada letra mostra quantos títulos existem naquele ponto do catálogo.
-- Letras sem títulos ficam desativadas.
-- Ao tocar numa letra, o Hub muda para A–Z, carrega automaticamente a parte necessária do catálogo e rola até aquela seção.
-- Separadores A, B, C... aparecem dentro da grade.
-- O índice respeita filtros de fonte, categoria e busca.
-- A busca considera título, coleção, número da edição e nome do acervo.
+- A barra **# A–Z** agora acompanha a posição da rolagem.
+- A letra da seção atual fica destacada automaticamente.
+- O próprio índice horizontal acompanha a letra ativa.
+- Tocar numa letra continua carregando automaticamente o trecho necessário do catálogo.
+- O catálogo mantém carregamento progressivo automático sem pesar o celular.
+- Ordenação alfabética permanece padronizada em português do Brasil com números naturais.
+
+### Leitor no celular
+
+- Toque no **centro da página** esconde ou mostra os controles.
+- Topo e rodapé desaparecem completamente sem diminuir a área do PDF/WebP.
+- Os controles reaparecem ao tocar novamente no centro.
+- Controles somem automaticamente após alguns segundos.
+- Ao avançar/voltar página, o chrome some mais rápido.
+- As zonas laterais para avançar/voltar foram ampliadas para aproximadamente **35% de cada lado**.
+- Quando há zoom acima de 100%, toque lateral não troca página acidentalmente.
+- Vertical/Webtoon também permitem mostrar ou esconder o chrome com toque central.
+- Abrir Miniaturas, Visual ou Menu mantém os controles visíveis até a interação terminar.
+- Tela cheia do navegador continua funcionando junto com o full-bleed.
 
 ### PDF e WebP
 
-- O cálculo do PDF usa praticamente toda a largura e altura disponíveis no celular.
-- PDF e WebP compartilham a mesma área full-bleed.
-- Flipbook continua com duas páginas quando apropriado.
-- Página única usa o maior tamanho possível sem cortar a imagem.
-- Vertical/Webtoon usam 100% da largura no celular.
-- Panorâmicas continuam detectadas automaticamente.
-
-### Celular em tela cheia
-
-- O leitor passa a ocupar **100dvw × 100dvh**.
-- Barra superior e rodapé deixam de reduzir a área da página e passam a ficar sobrepostos.
-- Título some quando os controles estão fechados.
-- Fechar e menu continuam acessíveis sobre a página.
-- Controles somem mais rapidamente após troca de página.
-- Safe areas do Android/iPhone são respeitadas.
-- Imersivo e tela cheia do navegador continuam disponíveis.
-
-## Acervos
-
-- Manga HQ Acervo 1.
-- Manga HQ Acervo 2.
-- As fontes carregam em paralelo e aparecem no seletor dinamicamente.
+- Continuam usando **100dvw × 100dvh** no celular.
+- Página única usa o máximo da tela sem corte.
+- Flipbook preserva duas páginas.
+- Panorâmicas usam toda a largura.
+- PDF mantém limite adaptativo de pixels para evitar travamentos.
 
 ## Validação
 
