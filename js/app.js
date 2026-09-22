@@ -2321,6 +2321,10 @@ async function renderPdfPageMode(token) {
     }
   } finally {
     root.classList.remove('pdf-stage-pending');
+    if (canStage && token !== state.renderToken && stage.isConnected) {
+      stage.querySelectorAll('canvas').forEach(canvas => { try { canvas.width=1; canvas.height=1; } catch {} });
+      stage.remove();
+    }
     if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
   }
 }
