@@ -1,0 +1,595 @@
+/* Manga-HQ-hub reader styles — v0.2.8 */
+
+/* Manga-HQ-hub v0.2.2 — Flipbook */
+.page-stage.flipbook-stage{
+  position:relative;
+  width:min(100%,1500px);
+  min-height:calc(100% - 8px);
+  margin:auto;
+  padding:18px 20px 22px;
+  gap:0!important;
+  perspective:2200px;
+  transform-style:preserve-3d;
+  border-radius:20px;
+  background:linear-gradient(90deg,rgba(255,255,255,.025),rgba(255,255,255,.07) 49.5%,rgba(0,0,0,.18) 50%,rgba(255,255,255,.07) 50.5%,rgba(255,255,255,.025));
+  box-shadow:0 34px 90px rgba(0,0,0,.38), inset 0 0 0 1px rgba(255,255,255,.05);
+  overflow:visible;
+}
+.page-stage.flipbook-stage.two-page::before{
+  content:"";
+  position:absolute;
+  z-index:6;
+  top:18px;
+  bottom:22px;
+  left:50%;
+  width:18px;
+  transform:translateX(-50%);
+  pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.22),rgba(255,255,255,.10),rgba(0,0,0,.28),transparent);
+  filter:blur(.2px);
+}
+.flipbook-page{
+  position:relative;
+  display:grid!important;
+  place-items:center;
+  flex:1 1 50%!important;
+  width:50%;
+  max-width:50%!important;
+  min-width:0!important;
+  min-height:1px;
+  overflow:hidden;
+  background:#f7f4ec;
+  transform-style:preserve-3d;
+  backface-visibility:hidden;
+  box-shadow:0 20px 46px rgba(0,0,0,.28);
+  will-change:transform,filter,opacity;
+}
+.flipbook-page-left{
+  border-radius:9px 1px 1px 9px;
+  transform-origin:right center;
+}
+.flipbook-page-right{
+  border-radius:1px 9px 9px 1px;
+  transform-origin:left center;
+}
+.flipbook-page::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:4;
+  pointer-events:none;
+  opacity:.32;
+}
+.flipbook-page-left::after{background:linear-gradient(90deg,rgba(0,0,0,.08),transparent 14%,transparent 72%,rgba(0,0,0,.18))}
+.flipbook-page-right::after{background:linear-gradient(90deg,rgba(0,0,0,.18),transparent 28%,transparent 86%,rgba(0,0,0,.08))}
+.flipbook-page>img,
+.flipbook-page>.pdf-page-canvas,
+.flipbook-page .pdf-page-canvas{
+  display:block;
+  max-width:100%;
+  width:auto;
+  height:auto!important;
+  max-height:calc(100dvh - 168px);
+  border-radius:0!important;
+  box-shadow:none!important;
+  background:#fff;
+}
+.flipbook-stage.cover-only{
+  justify-content:center;
+  background:transparent;
+  box-shadow:none;
+}
+.flipbook-stage.cover-only .flipbook-page{
+  flex:0 1 min(52%,760px)!important;
+  width:min(52%,760px);
+  max-width:min(52%,760px)!important;
+  border-radius:10px;
+  transform-origin:center center;
+}
+.flipbook-stage:not(.spread-rtl).flip-next .flipbook-page-right{
+  animation:flipBookNext .52s cubic-bezier(.2,.72,.22,1);
+}
+.flipbook-stage:not(.spread-rtl).flip-prev .flipbook-page-left{
+  animation:flipBookPrev .52s cubic-bezier(.2,.72,.22,1);
+}
+.flipbook-stage.spread-rtl.flip-next .flipbook-page-left{
+  animation:flipBookPrev .52s cubic-bezier(.2,.72,.22,1);
+}
+.flipbook-stage.spread-rtl.flip-prev .flipbook-page-right{
+  animation:flipBookNext .52s cubic-bezier(.2,.72,.22,1);
+}
+@keyframes flipBookNext{
+  0%{transform:rotateY(-78deg) translateZ(1px);opacity:.38;filter:brightness(.72)}
+  55%{filter:brightness(.9)}
+  100%{transform:rotateY(0) translateZ(0);opacity:1;filter:brightness(1)}
+}
+@keyframes flipBookPrev{
+  0%{transform:rotateY(78deg) translateZ(1px);opacity:.38;filter:brightness(.72)}
+  55%{filter:brightness(.9)}
+  100%{transform:rotateY(0) translateZ(0);opacity:1;filter:brightness(1)}
+}
+@media(max-width:850px){
+  .page-stage.flipbook-stage{padding:8px 6px 10px;border-radius:10px}
+  .page-stage.flipbook-stage.two-page::before{top:8px;bottom:10px;width:10px}
+  .flipbook-page>img,.flipbook-page .pdf-page-canvas{max-height:calc(100dvh - 126px)}
+}
+@media(max-width:650px) and (orientation:portrait){
+  .page-stage.flipbook-stage{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center;
+    justify-content:center;
+    gap:0!important;
+    padding-inline:2px;
+  }
+  .page-stage.flipbook-stage>.flipbook-page,
+  .page-stage.flipbook-stage>.spread-page{
+    display:grid!important;
+    width:50%!important;
+    max-width:50%!important;
+    margin:0!important;
+  }
+  .page-stage.flipbook-stage.cover-only>.flipbook-page,
+  .page-stage.flipbook-stage.cover-only>.spread-page{
+    width:min(94%,620px)!important;
+    max-width:min(94%,620px)!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .flipbook-stage .flipbook-page{animation:none!important}
+}
+
+
+/* Manga-HQ-hub v0.2.3 — Flipbook interativo */
+.flipbook-stage{cursor:grab;--flip-progress:0}
+.flipbook-stage.is-dragging{cursor:grabbing;user-select:none}
+.flipbook-stage.is-dragging .flipbook-page{transition:none!important}
+.flipbook-page.is-live-flip{
+  z-index:12;
+  transition:none!important;
+  box-shadow:0 28px 70px rgba(0,0,0,.45),-8px 0 24px rgba(0,0,0,.14);
+}
+.flipbook-page.flip-snapback{
+  transition:transform .18s ease-out,filter .18s ease-out!important;
+}
+.flipbook-stage.is-dragging::after{
+  content:"";
+  position:absolute;
+  z-index:11;
+  inset:18px 20px 22px;
+  pointer-events:none;
+  opacity:calc(.12 + var(--flip-progress) * .48);
+  background:radial-gradient(circle at 50% 50%,transparent 30%,rgba(0,0,0,.36) 100%);
+  border-radius:10px;
+}
+.flipbook-stage.drag-next .flipbook-page-right::before,
+.flipbook-stage.drag-prev .flipbook-page-left::before,
+.flipbook-stage.spread-rtl.drag-next .flipbook-page-left::before,
+.flipbook-stage.spread-rtl.drag-prev .flipbook-page-right::before{
+  content:"";
+  position:absolute;
+  z-index:5;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,.12),transparent 22%,rgba(0,0,0,.12));
+}
+.flipbook-stage .flipbook-page-right{cursor:w-resize}
+.flipbook-stage .flipbook-page-left{cursor:e-resize}
+.flipbook-stage.spread-rtl .flipbook-page-right{cursor:e-resize}
+.flipbook-stage.spread-rtl .flipbook-page-left{cursor:w-resize}
+@media(max-width:850px){
+  .flipbook-stage.is-dragging::after{inset:8px 6px 10px}
+}
+
+
+/* Manga-HQ-hub v0.2.4 — acabamento Flipbook */
+.flipbook-page-number{
+  position:absolute;
+  z-index:8;
+  bottom:7px;
+  min-width:25px;
+  height:25px;
+  padding:0 7px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:rgba(12,15,21,.62);
+  color:rgba(255,255,255,.88);
+  border:1px solid rgba(255,255,255,.12);
+  font-size:10px;
+  font-weight:900;
+  line-height:1;
+  pointer-events:none;
+  backdrop-filter:blur(6px);
+  opacity:.72;
+}
+.flipbook-page-left .flipbook-page-number{left:9px}
+.flipbook-page-right .flipbook-page-number{right:9px}
+.flipbook-corner-hint{
+  position:absolute;
+  z-index:7;
+  bottom:0;
+  width:42px;
+  height:42px;
+  pointer-events:none;
+  opacity:.25;
+  transition:opacity .18s ease,transform .18s ease;
+}
+.flipbook-page-left .flipbook-corner-hint{
+  left:0;
+  background:linear-gradient(45deg,rgba(0,0,0,.26),transparent 52%);
+  clip-path:polygon(0 0,0 100%,100% 100%);
+}
+.flipbook-page-right .flipbook-corner-hint{
+  right:0;
+  background:linear-gradient(-45deg,rgba(0,0,0,.26),transparent 52%);
+  clip-path:polygon(100% 0,0 100%,100% 100%);
+}
+.flipbook-page:hover .flipbook-corner-hint{opacity:.58;transform:scale(1.08)}
+.flipbook-stage.two-page{
+  isolation:isolate;
+}
+.flipbook-stage.two-page .flipbook-page-left{
+  box-shadow:-12px 18px 40px rgba(0,0,0,.28),inset -13px 0 18px -18px rgba(0,0,0,.68);
+}
+.flipbook-stage.two-page .flipbook-page-right{
+  box-shadow:12px 18px 40px rgba(0,0,0,.28),inset 13px 0 18px -18px rgba(0,0,0,.68);
+}
+.flipbook-stage.two-page::before{
+  box-shadow:0 0 18px rgba(0,0,0,.12);
+}
+@media(max-width:650px) and (orientation:portrait){
+  .reader-body.page-mode{padding-inline:1px!important}
+  .page-stage.flipbook-stage{
+    width:100%;
+    max-width:none;
+    padding:5px 1px 8px;
+    border-radius:4px;
+  }
+  .page-stage.flipbook-stage.two-page::before{
+    top:5px;
+    bottom:8px;
+    width:6px;
+  }
+  .flipbook-page-number{
+    bottom:3px;
+    min-width:19px;
+    height:19px;
+    padding:0 5px;
+    font-size:8px;
+    opacity:.56;
+  }
+  .flipbook-page-left .flipbook-page-number{left:3px}
+  .flipbook-page-right .flipbook-page-number{right:3px}
+  .flipbook-corner-hint{width:28px;height:28px}
+  .flipbook-page>img,.flipbook-page .pdf-page-canvas{
+    max-height:calc(100dvh - 118px);
+  }
+}
+@media(max-width:420px){
+  .flipbook-page-number{display:none}
+}
+
+
+/* Manga-HQ-hub v0.2.5 — Mobile refinement */
+.mobile-filter-btn{display:none}
+@media(max-width:850px){
+  html,body{max-width:100%;overscroll-behavior-x:none}
+  body{-webkit-tap-highlight-color:transparent}
+  button,.nav,.card,.chip,.featured-card{touch-action:manipulation}
+  .topbar{
+    height:56px;
+    min-height:56px;
+    padding-left:max(8px,env(safe-area-inset-left));
+    padding-right:max(8px,env(safe-area-inset-right));
+  }
+  .brand-logo{width:104px!important;height:36px!important;object-fit:contain}
+  .top-actions{gap:3px}
+  .top-actions #driveBtn{display:none}
+  .top-actions .icon-btn,.top-actions #localBtn{min-width:40px;min-height:40px}
+  .network-status{font-size:0;width:30px;height:30px;border-radius:999px;padding:0}
+  .network-status::before{content:'●';font-size:13px}
+  .network-status.online::before{color:#34d399}
+  .network-status.offline::before{color:#fb7185}
+
+  .content{padding:9px 8px calc(88px + env(safe-area-inset-bottom,0px))}
+  .hero{padding:11px 12px;border-radius:17px}
+  .hero-copy .eyebrow{font-size:8px;letter-spacing:.12em}
+  .hero h1{font-size:20px;margin-top:6px}
+  .stats{gap:4px}
+  .stats div{padding:8px 5px;border-radius:12px}
+  .stats b{font-size:18px}
+  .stats span{font-size:7px}
+
+  .toolbar{
+    top:56px;
+    grid-template-columns:minmax(0,1fr) 44px 44px!important;
+    gap:6px;
+    margin:0 -1px 10px;
+    padding:6px 1px;
+  }
+  .toolbar .search{grid-column:1/2;grid-row:1}
+  .mobile-filter-btn{
+    display:grid;
+    grid-column:2/3;
+    grid-row:1;
+    place-items:center;
+    width:44px;
+    min-width:44px;
+    height:44px;
+    padding:0;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:var(--panel);
+    color:var(--text);
+    font-size:18px;
+    font-weight:900;
+  }
+  .toolbar #refreshBtn{
+    grid-column:3/4!important;
+    grid-row:1!important;
+    width:44px!important;
+    min-width:44px!important;
+    height:44px!important;
+  }
+  .toolbar #sourceSelect,.toolbar #sortSelect{
+    display:none;
+    grid-column:1/4!important;
+    width:100%;
+    height:44px;
+    font-size:13px;
+  }
+  .toolbar.mobile-filters-open #sourceSelect{display:block;grid-row:2!important}
+  .toolbar.mobile-filters-open #sortSelect{display:block;grid-row:3!important}
+  .search{height:44px}
+  .search input{font-size:16px!important;padding:10px 0!important}
+
+  .section-head{align-items:center;margin-bottom:9px}
+  .section-head h2{font-size:18px}
+  .featured-section,.categories-section{margin-top:14px}
+  .featured-carousel{grid-auto-columns:minmax(205px,76vw);gap:10px}
+  .featured-card{border-radius:18px}
+  .featured-body{padding:11px 12px 13px}
+  .featured-body strong{font-size:14px}
+  .category-chips{gap:7px}
+  .chip{padding:9px 11px;font-size:11px}
+
+  .grid{gap:8px}
+  .card,.collection-card{border-radius:14px}
+  .card-actions button{min-height:44px}
+  .fav{width:38px;height:38px}
+  .load-more{width:100%;min-height:46px;margin-top:14px}
+
+  .sidebar{
+    height:calc(68px + env(safe-area-inset-bottom,0px));
+    padding:4px 5px calc(4px + env(safe-area-inset-bottom,0px));
+  }
+  .nav{height:54px;flex-basis:62px;min-width:62px;border-radius:12px}
+  .nav.active{background:linear-gradient(180deg,rgba(124,58,237,.20),rgba(124,58,237,.08));box-shadow:inset 0 0 0 1px rgba(124,58,237,.20)}
+  .nav span{font-size:8px!important}
+
+  .reader{
+    height:100dvh;
+    min-height:100dvh;
+    grid-template-rows:50px minmax(0,1fr) auto;
+  }
+  .reader-topbar{
+    height:50px;
+    min-height:50px;
+    padding:0 max(6px,env(safe-area-inset-right)) 0 max(6px,env(safe-area-inset-left));
+  }
+  .reader-topbar>.icon-btn{width:42px;height:42px;flex-basis:42px}
+  .reader-title-wrap{min-width:0}
+  .reader-title-wrap strong{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .reader-title-wrap small{font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .reader-menu-btn{width:42px!important;height:42px!important}
+
+  .reader-controls{
+    left:6px;
+    right:6px;
+    bottom:calc(62px + env(safe-area-inset-bottom,0px));
+    max-height:min(68dvh,520px);
+    overflow:auto;
+    padding:9px;
+    gap:6px;
+    border-radius:18px;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    overscroll-behavior:contain;
+  }
+  .reader-controls .ghost,.reader-controls .icon-btn,.reader-controls .zoom-label{
+    min-height:46px!important;
+  }
+  .reader-body{min-height:0}
+  .reader-body.page-mode{padding:0!important}
+  .page-stage{padding:0!important}
+  .reader-footer{
+    min-height:56px;
+    padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom,0px)) max(6px,env(safe-area-inset-left));
+  }
+  .reader-footer button{width:44px;height:44px;min-width:44px!important}
+  .reader-footer input[type=range]{accent-color:var(--accent)}
+  .page-jump{min-width:86px}
+  .page-jump input{height:40px}
+  .thumb-drawer{
+    top:50px;
+    bottom:56px;
+    width:min(320px,92vw);
+  }
+  .thumb-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:7px}
+  .thumb-item{min-height:118px;padding:4px}
+  .thumb-preview img,.thumb-preview canvas{max-height:145px}
+  .reader-loading{inset:50px 0 0}
+
+  .modal{padding:0}
+  .modal-card,.modal-card.compact{border-radius:20px 20px 0 0;max-height:94dvh}
+}
+@media(max-width:520px){
+  .hero{margin-bottom:8px}
+  .hero-copy .eyebrow{display:none}
+  .hero h1{font-size:19px;margin:0}
+  .stats span{font-size:6.5px}
+  .featured-carousel{grid-auto-columns:82vw}
+  .carousel-actions{display:none}
+  .reader-footer input[type=range]{display:none}
+  .reader-footer .bookmark-jump{display:none}
+  .reader-footer{justify-content:space-between}
+  .page-jump{flex:1;min-width:0}
+  .page-jump input{width:54px;min-width:54px}
+  .page-jump span{font-size:10px!important;min-width:58px!important}
+  .reader-controls{grid-template-columns:repeat(4,minmax(0,1fr));bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  .zoom-controls{grid-column:span 4}
+}
+@media(max-width:430px){
+  .grid{grid-template-columns:1fr}
+  .card{
+    grid-template-columns:104px minmax(0,1fr);
+    min-height:148px;
+  }
+  .card .cover{min-height:148px}
+  .card .card-body{padding:9px}
+  .card .title{font-size:13px;line-height:1.25}
+  .card-actions button{min-height:42px}
+  .thumb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .reader-controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .zoom-controls{grid-column:span 3}
+}
+@media(max-width:360px){
+  .top-actions #themeBtn{display:none}
+  .brand-logo{width:92px!important}
+  .reader-title-wrap small{display:none}
+}
+
+
+/* Manga-HQ-hub v0.2.6 — mobile reader performance */
+.flipbook-stage.single-wide{
+  justify-content:center;
+  gap:0!important;
+  background:transparent;
+  box-shadow:none;
+}
+.flipbook-stage.single-wide::before{display:none}
+.flipbook-stage.single-wide>.flipbook-page,
+.flipbook-stage.single-wide>.spread-page{
+  flex:0 1 min(96%,1100px)!important;
+  width:min(96%,1100px)!important;
+  max-width:min(96%,1100px)!important;
+  transform-origin:center center!important;
+}
+.flipbook-stage.single-wide .flipbook-page-number{right:8px;left:auto}
+.flipbook-stage.single-wide .flipbook-corner-hint{display:none}
+.reader-body img,.reader-body canvas{contain:paint}
+@media(max-width:850px){
+  .reader-body{contain:layout paint style}
+  .page-stage.flipbook-stage{will-change:auto}
+  .flipbook-page{will-change:auto}
+  .flipbook-page.is-live-flip{will-change:transform}
+  .page-stage img{image-rendering:auto}
+  .flipbook-stage.single-wide>.flipbook-page,
+  .flipbook-stage.single-wide>.spread-page{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .flipbook-stage.single-wide img,
+  .flipbook-stage.single-wide .pdf-page-canvas{
+    max-width:100%!important;
+    width:100%!important;
+    height:auto!important;
+    max-height:calc(100dvh - 110px)!important;
+    object-fit:contain;
+  }
+}
+@media(max-width:430px){
+  .flipbook-stage.flip-next .flipbook-page,
+  .flipbook-stage.flip-prev .flipbook-page{
+    animation-duration:.34s!important;
+  }
+  .reader-loading .spinner{width:30px;height:30px}
+}
+
+
+/* Manga-HQ-hub v0.2.8 — dual mobile reader */
+.reader-body.page-mode{
+  overflow:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.reader-body.page-mode::-webkit-scrollbar{display:none}
+.reader-body.page-mode.is-zoomed{touch-action:pan-x pan-y pinch-zoom}
+.reader-mode-page .page-stage:not(.spread-stage){
+  width:100%;
+  min-width:100%;
+  min-height:100%;
+  display:grid;
+  place-items:center;
+  align-content:center;
+}
+.reader-mode-page .page-stage:not(.spread-stage)>img{
+  display:block;
+  width:auto;
+  max-width:100%;
+  height:auto;
+  max-height:calc(100dvh - 118px);
+  object-fit:contain;
+  margin:auto;
+}
+.reader-mode-page .reader-body.is-zoomed .page-stage:not(.spread-stage){
+  display:block;
+  min-width:max-content;
+  min-height:max-content;
+}
+.reader-mode-page .reader-body.is-zoomed .page-stage:not(.spread-stage)>img{
+  max-height:none;
+  margin:0 auto;
+}
+@media(max-width:850px){
+  .reader-mode-page .reader-body.page-mode{
+    padding:0!important;
+    scroll-snap-type:none;
+  }
+  .reader-mode-page .page-stage:not(.spread-stage){
+    padding:0!important;
+  }
+  .reader-mode-page .page-stage:not(.spread-stage)>img{
+    width:auto;
+    max-width:100%;
+    max-height:calc(100dvh - 106px);
+    border-radius:0;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage{
+    width:100%;
+    max-width:100%;
+    overflow:visible;
+  }
+  .reader-mode-spread .flipbook-page{
+    contain:layout paint;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+  }
+  .reader-mode-spread .flipbook-page>img{
+    object-fit:contain;
+    max-width:100%;
+  }
+}
+@media(max-width:650px) and (orientation:portrait){
+  .reader-mode-spread .page-stage.flipbook-stage.two-page{
+    min-height:calc(100dvh - 106px);
+    align-content:center;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage.two-page>.flipbook-page{
+    min-width:0!important;
+    overflow:hidden;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage.two-page>.flipbook-page>img{
+    width:100%!important;
+    max-width:100%!important;
+    height:auto!important;
+    max-height:calc(100dvh - 112px)!important;
+  }
+}
+@media(max-width:430px){
+  .reader-mode-page .page-stage:not(.spread-stage)>img{
+    max-height:calc(100dvh - 102px);
+  }
+  .reader-mode-spread .flipbook-page-number{display:none}
+  .reader-mode-spread .flipbook-corner-hint{opacity:.16}
+}
