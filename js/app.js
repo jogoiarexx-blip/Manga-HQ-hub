@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.9',
+  appVersion: '0.2.10',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -80,7 +80,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1196,9 +1196,17 @@ async function openItem(item, forceLarge = false) {
   const token = ++state.openToken;
   await cleanupReaderData();
   if (token !== state.openToken) return;
+  const readerWasHidden = $('#reader')?.classList.contains('hidden');
   state.current = item;
+  if (readerWasHidden && !state.readerHistoryActive) {
+    try {
+      history.pushState({ ...(history.state || {}), mhqrReader:true }, '', location.href);
+      state.readerHistoryActive = true;
+    } catch {}
+  }
   const savedReader = itemReaderPrefs[item.id] || {};
   state.page = progress[item.id]?.page || 0;
+  state.verticalRestore = { page:state.page, ratio:Number(progress[item.id]?.verticalOffsetRatio || 0) };
   state.mode = normalizedMode(progress[item.id]?.mode || savedReader.mode || prefs.defaultMode);
   state.direction = progress[item.id]?.direction || savedReader.direction || prefs.direction || 'ltr';
   state.fit = ['contain','width','height'].includes(savedReader.fit) ? savedReader.fit : 'contain';
@@ -1638,7 +1646,7 @@ async function renderPdfInto(container, index, token, vertical = false) {
   }
   if (token !== state.renderToken || !container?.isConnected) return;
   container.innerHTML = ''; container.appendChild(canvas);
-  if (vertical) container.style.aspectRatio = `${viewport.width}/${viewport.height}`;
+  if (vertical) { container.style.aspectRatio = `${viewport.width}/${viewport.height}`; if (index === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); }
 }
 
 function flipbookAnimationClass() {
@@ -1676,7 +1684,7 @@ async function renderPdfVerticalMode(token) {
   $('#readerBody').classList.remove('page-mode');
   $('#readerBody').innerHTML = `<div class="vertical-pages pdf-vertical ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot pdf-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
   setupVerticalObserver();
-  requestAnimationFrame(() => $(`.page-slot[data-i="${state.page}"]`)?.scrollIntoView({ block: 'start' }));
+  requestAnimationFrame(() => restoreVerticalPosition(true));
 }
 
 async function getPageUrl(index, expectedToken = state.renderToken) {
@@ -1730,10 +1738,34 @@ async function prefetchPage(index, expectedToken = state.renderToken) {
     try { await fetch(url, { cache:'force-cache', priority:'low' }); } catch {}
   }
 }
-
-function scheduleReaderPrefetch(fn) {
-  if ('requestIdleCallback' in window) return requestIdleCallback(fn, { timeout: 900 });
-  return setTimeout(fn, 120);
+function resetPrefetchQueue() {
+  state.prefetchQueue = [];
+  state.prefetchQueued.clear();
+}
+function pumpPrefetchQueue() {
+  const token = state.renderToken;
+  const limit = performanceProfile().mobile ? 1 : 2;
+  while (state.prefetchActive < limit && state.prefetchQueue.length) {
+    const job = state.prefetchQueue.shift();
+    if (!job) break;
+    state.prefetchQueued.delete(job.key);
+    if (job.token !== token || job.index < 0 || job.index >= state.pages.length) continue;
+    state.prefetchActive++;
+    const run = () => prefetchPage(job.index, job.token).catch(() => {}).finally(() => {
+      state.prefetchActive = Math.max(0, state.prefetchActive - 1);
+      pumpPrefetchQueue();
+    });
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:900 });
+    else setTimeout(run, 120);
+  }
+}
+function queuePagePrefetch(index, expectedToken = state.renderToken) {
+  if (!performanceProfile().prefetch || index < 0 || index >= state.pages.length || expectedToken !== state.renderToken) return;
+  const key = `${expectedToken}:${index}`;
+  if (state.prefetchQueued.has(key)) return;
+  state.prefetchQueued.add(key);
+  state.prefetchQueue.push({ index, token:expectedToken, key });
+  pumpPrefetchQueue();
 }
 function prefetchNeighborSpreads(expectedToken = state.renderToken) {
   const profile = performanceProfile();
@@ -1744,7 +1776,7 @@ function prefetchNeighborSpreads(expectedToken = state.renderToken) {
     if (target < 0 || target >= state.pages.length) continue;
     for (const i of spreadIndexes(target)) if (i >= 0 && i < state.pages.length) candidates.add(i);
   }
-  for (const i of candidates) scheduleReaderPrefetch(() => prefetchPage(i, expectedToken).catch(() => {}));
+  for (const i of candidates) queuePagePrefetch(i, expectedToken);
 }
 
 function trimPageCache(center) {
@@ -1820,7 +1852,7 @@ async function renderReaderPages() {
     $('#readerBody').classList.remove('page-mode');
     $('#readerBody').innerHTML = `<div class="vertical-pages ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
     setupVerticalObserver();
-    requestAnimationFrame(() => $(`.page-slot[data-i="${state.page}"]`)?.scrollIntoView({ block: 'start' }));
+    requestAnimationFrame(() => restoreVerticalPosition(true));
   } else {
     $('#readerFooter').classList.remove('hidden');
     $('#readerLoading').classList.remove('hidden'); $('#loadingText').textContent = `Carregando página ${state.page + 1}…`;
@@ -1846,7 +1878,7 @@ async function renderReaderPages() {
       }
       if (performanceProfile().prefetch) {
         if (spread) prefetchNeighborSpreads(token);
-        else { const p=performanceProfile(); const targets=p.prefetchBothDirections?[state.page-1,state.page+1]:[state.page+1]; targets.filter(i=>i>=0&&i<state.pages.length).forEach(i=>scheduleReaderPrefetch(()=>prefetchPage(i,token).catch(()=>{}))); }
+        else { const p=performanceProfile(); const targets=p.prefetchBothDirections?[state.page-1,state.page+1]:[state.page+1]; targets.filter(i=>i>=0&&i<state.pages.length).forEach(i=>queuePagePrefetch(i,token)); }
       }
     } catch (err) {
       if (token === state.renderToken) showReaderError('Falha ao carregar página', err.message);
@@ -1885,7 +1917,7 @@ async function loadVerticalSlot(slot) {
     const url = await getPageUrl(i);
     if (!slot.isConnected) return;
     const img = new Image(); img.alt = `Página ${i + 1}`; img.loading = 'lazy'; img.decoding = 'async'; img.fetchPriority = 'low'; img.src = url;
-    img.onload = () => { if (img.naturalWidth && img.naturalHeight) slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; };
+    img.onload = () => { if (img.naturalWidth && img.naturalHeight) slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; if (i === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); };
     img.onerror = () => {
       const entry = state.archive?.entries?.[i];
       if (state.archive?.type === 'drive-pages' && entry?.id) {
@@ -1928,14 +1960,46 @@ function cleanupVerticalSlots(force = false) {
   }
 }
 
+function currentVerticalOffsetRatio() {
+  if (!isVerticalMode() || !state.pages.length) return 0;
+  const root = $('#readerBody');
+  const slot = $(`.page-slot[data-i="${state.page}"]`);
+  if (!root || !slot || slot.offsetHeight <= 0) return 0;
+  return Math.max(0, Math.min(1, (root.scrollTop - slot.offsetTop) / slot.offsetHeight));
+}
+function scheduleVerticalProgressSave() {
+  clearTimeout(state.verticalSaveTimer);
+  state.verticalSaveTimer = setTimeout(() => {
+    state.verticalSaveTimer = 0;
+    if (!state.current || !isVerticalMode() || !state.pages.length) return;
+    const current = progress[state.current.id] || {};
+    progress[state.current.id] = { ...current, page:state.page, mode:state.mode, direction:state.direction, verticalOffsetRatio:currentVerticalOffsetRatio(), updated:Date.now() };
+    saveProgress();
+  }, 260);
+}
+function restoreVerticalPosition(force = false) {
+  if (!isVerticalMode() || !state.pages.length) return;
+  const restore = state.verticalRestore;
+  if (!restore || (!force && Number(restore.page) !== Number(state.page))) return;
+  const root = $('#readerBody');
+  const slot = $(`.page-slot[data-i="${state.page}"]`);
+  if (!root || !slot) return;
+  const ratio = Math.max(0, Math.min(1, Number(restore.ratio || 0)));
+  root.scrollTop = Math.max(0, slot.offsetTop + ratio * slot.offsetHeight);
+}
 function updateVerticalPosition() {
   if (!isVerticalMode() || !state.pages.length) return;
   const rootRect = $('#readerBody').getBoundingClientRect(); let best = state.page; let dist = Infinity;
-  for (const slot of $$('.page-slot')) {
+  for (const slot of $('.page-slot')) {
     const d = Math.abs(slot.getBoundingClientRect().top - rootRect.top);
     if (d < dist) { dist = d; best = Number(slot.dataset.i); }
   }
-  if (best !== state.page) { state.page = best; updateProgress(); updatePageControls(); }
+  if (best !== state.page) {
+    state.page = best;
+    state.verticalRestore = null;
+    updateProgress(); updatePageControls();
+  }
+  scheduleVerticalProgressSave();
 }
 
 function stopVerticalObserver() {
@@ -1969,25 +2033,40 @@ function updateProgress() {
   if (!state.current || !state.pages.length) return;
   const readThrough = effectiveMode() === 'spread' ? (spreadIndexes().at(-1) + 1) : state.page + 1;
   const pct = Math.round((readThrough / state.pages.length) * 100);
-  progress[state.current.id] = { percent: pct, page: state.page, mode: state.mode, direction: state.direction, updated: Date.now() };
+  progress[state.current.id] = { percent: pct, page: state.page, mode: state.mode, direction: state.direction, verticalOffsetRatio:isVerticalMode() ? currentVerticalOffsetRatio() : 0, updated: Date.now() };
   saveProgress(); updateLibraryStats(); updateCompleteButton();
 }
 async function setPage(n) {
   if (!state.pages.length) return;
-  const requestId = ++state.pageSetSeq;
-  const current = state.page;
-  const target = Math.max(0, Math.min(state.pages.length - 1, n));
-  if (target === current && !state.flipDirection) return;
-  state.pdfRenderTask?.cancel?.();
-  state.flipDirection = target > current ? 'next' : target < current ? 'prev' : '';
-  state.page = target;
-  if (!prefs.keepZoom) {
-    state.zoom = 1;
-    $('#readerBody')?.classList.remove('is-zoomed');
+  const target = Math.max(0, Math.min(state.pages.length - 1, Number(n) || 0));
+  if (state.pageTransitioning) {
+    state.pendingPageTarget = target;
+    return;
   }
-  await renderReaderPages();
-  resetPagedScrollPosition();
-  if (requestId === state.pageSetSeq) state.flipDirection = '';
+  const current = state.page;
+  if (target === current && !state.flipDirection) return;
+  state.pageTransitioning = true;
+  state.pendingPageTarget = null;
+  const requestId = ++state.pageSetSeq;
+  try {
+    state.pdfRenderTask?.cancel?.();
+    state.flipDirection = target > current ? 'next' : target < current ? 'prev' : '';
+    state.page = target;
+    state.verticalRestore = null;
+    if (!prefs.keepZoom) {
+      state.zoom = 1;
+      $('#readerBody')?.classList.remove('is-zoomed');
+    }
+    resetPrefetchQueue();
+    await renderReaderPages();
+    resetPagedScrollPosition();
+    if (requestId === state.pageSetSeq) state.flipDirection = '';
+  } finally {
+    state.pageTransitioning = false;
+    const pending = state.pendingPageTarget;
+    state.pendingPageTarget = null;
+    if (Number.isFinite(pending) && pending !== state.page) setPage(pending);
+  }
 }
 
 async function cleanupReaderData() {
@@ -1998,6 +2077,7 @@ async function cleanupReaderData() {
   state.readerDownloadController = null;
   stopVerticalObserver();
   state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0;
+  resetPrefetchQueue(); state.prefetchActive = 0; clearTimeout(state.verticalSaveTimer); state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
@@ -2006,16 +2086,28 @@ async function cleanupReaderData() {
   if (state.pdfDoc) { await state.pdfDoc.destroy().catch(() => {}); state.pdfDoc = null; }
   state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
 }
-async function closeReader() {
+async function closeReader(fromHistory = false) {
+  if (!fromHistory && state.readerHistoryActive && history.state?.mhqrReader) {
+    history.back();
+    return;
+  }
+  state.readerHistoryActive = false;
   closeReaderControls();
   $('#readerDisplayPanel')?.classList.add('hidden');
   setImmersive(false);
-  if (isVerticalMode()) updateVerticalPosition();
+  if (isVerticalMode()) { updateVerticalPosition(); scheduleVerticalProgressSave(); }
   state.openToken++;
   await cleanupReaderData();
   $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true');
-  document.body.style.overflow = ''; state.current = null; $('#readerBody').innerHTML = ''; render();
+  document.body.style.overflow = ''; state.current = null; state.verticalRestore = null; $('#readerBody').innerHTML = ''; render();
 }
+
+window.addEventListener('popstate', () => {
+  if (!$('#reader')?.classList.contains('hidden') && state.readerHistoryActive && !history.state?.mhqrReader) {
+    state.readerHistoryActive = false;
+    closeReader(true).catch(() => {});
+  }
+});
 
 function markComplete() {
   if (!state.current) return;
@@ -2550,7 +2642,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.9', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.10', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -2586,7 +2678,23 @@ $('#installBtn').addEventListener('click', async () => {
   if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $('#installBtn').classList.add('hidden');
 });
 
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') cleanupVerticalSlots(true); });
+function releaseDistantPageCache() {
+  resetPrefetchQueue();
+  if (!state.pages.length) return;
+  const keep = new Set(effectiveMode() === 'spread' ? spreadIndexes() : [state.page]);
+  for (const [index, url] of [...state.pageUrls.entries()]) {
+    if (keep.has(index)) continue;
+    if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
+    state.pageUrls.delete(index); state.pageUse.delete(index);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    cleanupVerticalSlots(true);
+    releaseDistantPageCache();
+    if (isVerticalMode()) scheduleVerticalProgressSave();
+  }
+});
 let readerResizeTimer = 0;
 function handleReaderViewportChange() {
   if ($('#reader').classList.contains('hidden') || !state.pages.length) return;
