@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.6';
+const VERSION = '0.3.7';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -53,6 +53,12 @@ assert(app.includes('function jumpToCatalogLetter'), 'alphabet jump logic exists
 assert(app.includes('function renderAlphabeticalCards'), 'alphabet sections exist');
 assert(app.includes("classList.toggle('mobile-fullbleed'"), 'mobile full-bleed reader is wired');
 assert(readerCss.includes('.reader.mobile-fullbleed'), 'mobile full-bleed CSS exists');
+assert(app.includes('function updateAlphabetFromScroll'), 'alphabet scroll tracking exists');
+assert(app.includes('function setActiveAlphabetLetter'), 'alphabet active state exists');
+assert(app.includes('function toggleReaderChrome'), 'reader chrome toggle exists');
+assert(app.includes('function scheduleReaderChromeHide'), 'reader chrome auto-hide exists');
+assert(readerCss.includes('.reader-chrome-hidden'), 'reader chrome hidden CSS exists');
+assert(appCss.includes('.alphabet-btn.active'), 'active alphabet button CSS exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
