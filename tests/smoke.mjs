@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.4';
+const VERSION = '0.3.5';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -40,6 +40,14 @@ assert(app.includes('verticalOffsetRatio'), 'vertical exact progress is present'
 assert(app.includes('function queuePagePrefetch'), 'controlled prefetch queue is present');
 assert(app.includes('pageTransitioning'), 'page navigation coalescing is present');
 assert(app.includes('fileUrl'), 'external PDF fileUrl support is present');
+assert(index.includes(`config.js?v=${VERSION}`), 'versioned config.js');
+assert(index.includes(`Manga-HQ-hub v${VERSION}`), 'visible title version');
+assert(index.includes('external-acervo-2'), 'Acervo 2 source option is present');
+assert(app.includes('function renderSourceOptions'), 'dynamic source selector is present');
+assert(app.includes('Promise.all(jobs)'), 'external catalogs load in parallel');
+assert(app.includes('failedSourceIds'), 'failed external source fallback is present');
+assert(sw.includes('REMOTE_IMAGE_CACHE'), 'remote image cache is present');
+assert(sw.includes('RAW_GITHUB_ORIGIN'), 'raw GitHub routing is present');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
