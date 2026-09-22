@@ -255,6 +255,7 @@ function refreshMobileReadingScale() {
   const root = $('#readerBody');
   if (!root) return;
   root.classList.toggle('mobile-reading-active', performanceProfile().mobile && mode !== 'off');
+  root.style.overscrollBehaviorX = performanceProfile().mobile && mode !== 'off' ? 'contain' : '';
 
   if (isVerticalMode()) {
     $('.page-slot', root).forEach(slot => {
@@ -2109,6 +2110,8 @@ async function renderPdfInto(container, index, token, vertical = false) {
   dpr = Math.max(.75, Math.min(profile.pdfDpr, dpr));
   const canvas = document.createElement('canvas');
   canvas.className = 'pdf-page-canvas';
+  canvas.style.setProperty('--mobile-reading-scale', String(mobileReadingScale));
+  canvas.classList.toggle('mobile-reading-enlarged', performanceProfile().mobile && mobileReadingScale > 1.01);
   canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
   canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
   canvas.style.width = `${Math.floor(viewport.width)}px`;
@@ -2920,7 +2923,13 @@ function applyImageZoomWithoutRender(zoomValue = state.zoom) {
     stage.querySelectorAll(':scope > img, .flipbook-page > img').forEach(img => {
       const baseScale = effectiveMode() === 'page' ? Number(img.dataset.mobileBaseScale || 1) : 1;
       const combined = effectiveZoom * Math.max(1, baseScale);
-      if (combined <= 1.001) {
+      if (performanceProfile().mobile && effectiveMode() === 'page') {
+        img.style.setProperty('--reader-page-width', combined <= 1.001 ? 'auto' : `${Math.round(combined * 100)}dvw`);
+        img.style.setProperty('--reader-page-max', combined <= 1.001 ? '100dvw' : 'none');
+        img.style.removeProperty('width');
+        img.style.removeProperty('max-width');
+        img.style.removeProperty('height');
+      } else if (combined <= 1.001) {
         img.style.removeProperty('width');
         img.style.removeProperty('max-width');
         img.style.removeProperty('height');
