@@ -980,7 +980,7 @@
     margin-top:0!important;
   }
   .reader.mobile-fullbleed.reader-mode-vertical .page-slot.mobile-reading-slot{
-    width:calc(100dvw * var(--mobile-reading-scale,1))!important;
+    width:var(--mobile-reading-width,100dvw)!important;
     max-width:none!important;
     overflow:hidden!important;
   }
@@ -998,7 +998,7 @@
     height:auto!important;
   }
   .reader.mobile-fullbleed.reader-mode-page .pdf-page-canvas.mobile-reading-enlarged{
-    width:calc(100dvw * var(--mobile-reading-scale,1))!important;
+    width:var(--mobile-reading-width,100dvw)!important;
     max-width:none!important;
     height:auto!important;
   }
