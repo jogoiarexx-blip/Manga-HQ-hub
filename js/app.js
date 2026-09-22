@@ -80,7 +80,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map()
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -579,21 +579,26 @@ function resolveExternalUrl(base, value) {
 }
 async function loadExternalCatalogs() {
   const sources = Array.isArray(CONFIG.externalSources) ? CONFIG.externalSources : [];
-  const items = [];
-  let firstSeenDirty = false;
   const seenNow = Date.now();
-  for (let index = 0; index < sources.length; index++) {
-    const src = sources[index] || {};
-    if (!src.catalogUrl) continue;
+  let firstSeenDirty = false;
+  state.externalSourceStatus = new Map();
+
+  const jobs = sources.map(async (src, index) => {
+    const sourceId = String(src?.id || `external-${index + 1}`);
+    const sourceName = String(src?.name || `Acervo ${index + 1}`);
+    if (!src?.catalogUrl) return { sourceId, sourceName, ok:false, items:[], error:'Catálogo não configurado' };
+
+    const catalogUrl = resolveExternalUrl(location.href, src.catalogUrl);
+    const siteUrl = resolveExternalUrl(catalogUrl, src.siteUrl || './');
+    const started = performance.now();
+
     try {
-      const catalogUrl = resolveExternalUrl(location.href, src.catalogUrl);
-      const siteUrl = resolveExternalUrl(catalogUrl, src.siteUrl || './');
       const r = await fetch(catalogUrl, { cache:'no-store' });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       const rows = Array.isArray(data?.items) ? data.items : [];
-      const sourceId = String(src.id || `external-${index + 1}`);
-      const sourceName = String(src.name || data?.name || `Acervo ${index + 1}`);
+      const items = [];
+
       for (const row of rows) {
         const rawId = String(row?.id || row?.title || row?.name || '');
         const name = String(row?.title || row?.name || rawId).trim();
@@ -604,49 +609,78 @@ async function loadExternalCatalogs() {
         const isPdf = format === 'pdf' || String(fileUrl).toLowerCase().split(/[?#]/)[0].endsWith('.pdf');
         const manifestUrl = resolveExternalUrl(siteUrl, row?.manifest || '');
         const isPages = !isPdf && (format === 'webp' || format === 'webp-pages' || format === 'pages' || Boolean(manifestUrl));
-
-        if (!isPdf && !isPages) {
-          console.warn('Item externo ignorado por formato desconhecido:', row);
-          continue;
-        }
+        if (!isPdf && !isPages) continue;
 
         const stableId = `external:${sourceId}:${rawId}`;
         if (!Number(firstSeen[stableId])) { firstSeen[stableId] = seenNow; firstSeenDirty = true; }
 
         items.push({
-          id: stableId,
+          id:stableId,
           name,
-          readerType: isPdf ? 'pdf' : 'web-pages',
-          mimeType: isPdf ? 'application/pdf' : 'application/x-mhqr-web-pages',
-          pageCount: Number(row?.pageCount || 0),
-          coverUrl: resolveExternalUrl(siteUrl, row?.cover || ''),
-          manifestUrl: isPages ? manifestUrl : '',
-          fileUrl: isPdf ? fileUrl : '',
-          sourceUrl: resolveExternalUrl(siteUrl, row?.sourceUrl || '') || siteUrl,
-          externalSourceId: sourceId,
-          externalSourceName: sourceName,
-          seriesTitle: String(row?.collectionTitle || ''),
-          issueNumber: row?.issue ?? null,
-          modifiedTime: String(row?.modifiedTime || row?.updatedAt || row?.addedAt || new Date(Number(firstSeen[stableId]) || seenNow).toISOString()),
-          folderPath: String(row?.collectionTitle || data?.name || sourceName),
-          size: Number(row?.size || row?.sizeBytes || 0)
+          readerType:isPdf ? 'pdf' : 'web-pages',
+          mimeType:isPdf ? 'application/pdf' : 'application/x-mhqr-web-pages',
+          pageCount:Number(row?.pageCount || 0),
+          coverUrl:resolveExternalUrl(siteUrl, row?.cover || ''),
+          manifestUrl:isPages ? manifestUrl : '',
+          fileUrl:isPdf ? fileUrl : '',
+          sourceUrl:resolveExternalUrl(siteUrl, row?.sourceUrl || '') || siteUrl,
+          externalSourceId:sourceId,
+          externalSourceName:sourceName,
+          seriesTitle:String(row?.collectionTitle || ''),
+          issueNumber:row?.issue ?? null,
+          modifiedTime:String(row?.modifiedTime || row?.updatedAt || row?.addedAt || new Date(Number(firstSeen[stableId]) || seenNow).toISOString()),
+          folderPath:String(row?.collectionTitle || data?.name || sourceName),
+          size:Number(row?.size || row?.sizeBytes || 0)
         });
       }
-    } catch (err) {
-      console.warn('Falha ao carregar acervo externo:', src?.name || src?.catalogUrl, err);
+
+      return { sourceId, sourceName, ok:true, items, count:items.length, elapsed:Math.round(performance.now() - started) };
+    } catch (error) {
+      return { sourceId, sourceName, ok:false, items:[], error:error?.message || String(error), elapsed:Math.round(performance.now() - started) };
+    }
+  });
+
+  const results = await Promise.all(jobs);
+  const items = [];
+  const loadedSourceIds = new Set();
+  const failedSourceIds = new Set();
+
+  for (const result of results) {
+    state.externalSourceStatus.set(result.sourceId, result);
+    if (result.ok) {
+      loadedSourceIds.add(result.sourceId);
+      items.push(...result.items);
+    } else {
+      failedSourceIds.add(result.sourceId);
+      console.warn('Falha ao carregar acervo externo:', result.sourceName, result.error);
     }
   }
+
   if (firstSeenDirty) saveFirstSeen();
-  return uniqueItems(items);
+  return { items:uniqueItems(items), loadedSourceIds, failedSourceIds };
 }
 async function loadStaticCatalog() {
-  const r = await fetch('./data/catalog.json', { cache: 'no-store' });
-  if (!r.ok) throw new Error(`Catálogo local: HTTP ${r.status}`);
-  const bundled = uniqueItems(await r.json());
-  const external = await loadExternalCatalogs();
+  const [bundledResult, externalResult] = await Promise.allSettled([
+    fetch('./data/catalog.json', { cache:'no-store' }).then(async r => {
+      if (!r.ok) throw new Error(`Catálogo local: HTTP ${r.status}`);
+      return uniqueItems(await r.json());
+    }),
+    loadExternalCatalogs()
+  ]);
+
+  const bundled = bundledResult.status === 'fulfilled' ? bundledResult.value : [];
+  const external = externalResult.status === 'fulfilled'
+    ? externalResult.value
+    : { items:[], loadedSourceIds:new Set(), failedSourceIds:new Set((CONFIG.externalSources || []).map((src,index)=>String(src?.id || `external-${index+1}`))) };
+
   const cached = readJson(LS.catalog, []);
-  // Itens publicados têm prioridade sobre versões antigas salvas no navegador.
-  return uniqueItems([...(Array.isArray(cached) ? cached : []), ...bundled, ...external]);
+  const cachedRows = Array.isArray(cached) ? cached : [];
+  const cachedNonExternal = cachedRows.filter(item => !item?.externalSourceId);
+  const fallbackExternal = cachedRows.filter(item => item?.externalSourceId && external.failedSourceIds.has(String(item.externalSourceId)));
+
+  // Catálogos carregados com sucesso substituem completamente a versão antiga,
+  // evitando HQs removidas permanecerem como itens fantasmas.
+  return uniqueItems([...cachedNonExternal, ...fallbackExternal, ...bundled, ...external.items]);
 }
 function saveCatalogCache(items) {
   const clean = uniqueItems(items).map(({ localFile, offline, ...item }) => item);
@@ -817,9 +851,15 @@ async function loadLibrary() {
       state.syncStatus=[]; renderSyncProgress();
       state.items = await loadStaticCatalog(); const sm=readJson(LS.syncMeta,{}); const last=formatDateTime(sm.at);
       const externalCount = state.items.filter(item => item.externalSourceId).length;
-      $('#syncStatus').textContent = externalCount ? 'Acervo conectado ativo' : (last ? 'Catálogo salvo ativo' : 'Catálogo local ativo');
-      $('#syncDetail').textContent = externalCount ? `${state.items.length} itens disponíveis • Manga HQ Acervo: ${externalCount}` : `${state.items.length} itens disponíveis${last ? ` • última sincronização: ${last}` : ''}`;
-      $('#catalogNoticeText').textContent = externalCount ? `Manga HQ Acervo conectado com ${externalCount} edições WebP. As novas edições publicadas no catálogo aparecem ao atualizar a biblioteca.` : 'Nenhum acervo remoto conectado.'; $('#catalogNotice').classList.remove('hidden');
+      const sourceParts = (CONFIG.externalSources || []).map(src => {
+        const id=String(src?.id || '');
+        const count=state.items.filter(item => String(item.externalSourceId || '') === id).length;
+        const status=state.externalSourceStatus.get(id);
+        return `${src.name || id}: ${count}${status && !status.ok ? ' (cache)' : ''}`;
+      }).filter(Boolean);
+      $('#syncStatus').textContent = externalCount ? 'Acervos conectados ativos' : (last ? 'Catálogo salvo ativo' : 'Catálogo local ativo');
+      $('#syncDetail').textContent = externalCount ? `${state.items.length} itens disponíveis • ${sourceParts.join(' • ')}` : `${state.items.length} itens disponíveis${last ? ` • última sincronização: ${last}` : ''}`;
+      $('#catalogNoticeText').textContent = externalCount ? `${(CONFIG.externalSources || []).length} acervo(s) remoto(s) conectado(s), com ${externalCount} itens externos. Atualizar busca a versão mais recente de cada catálogo.` : 'Nenhum acervo remoto conectado.'; $('#catalogNotice').classList.remove('hidden');
     }
   } catch (err) {
     state.items = await loadStaticCatalog().catch(()=>[]); $('#syncStatus').textContent='Falha no catálogo'; $('#syncDetail').textContent=err.message; toast(`Falha ao carregar biblioteca: ${err.message}`);
@@ -967,6 +1007,36 @@ function libraryCounts() {
   for (const item of state.items) counts[sourceKeyFor(item)] = (counts[sourceKeyFor(item)] || 0) + 1;
   return counts;
 }
+function renderSourceOptions() {
+  const select = $('#sourceSelect'); if (!select) return;
+  const counts = libraryCounts();
+  const options = [{ value:'all', label:`Todas as fontes (${state.items.length})` }];
+
+  for (const src of (CONFIG.externalSources || [])) {
+    const id = String(src?.id || '');
+    if (!id) continue;
+    const key = `external-${id.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()}`;
+    const status = state.externalSourceStatus.get(id);
+    const suffix = status && !status.ok ? ' • cache' : '';
+    options.push({ value:key, label:`${src.name || id} (${counts[key] || 0})${suffix}` });
+  }
+
+  if ((CONFIG.folderIds || []).length) {
+    for (let i=0;i<CONFIG.folderIds.length;i++) {
+      const key=`library-${i+1}`;
+      options.push({ value:key, label:`Biblioteca ${i+1} (${counts[key] || 0})` });
+    }
+  }
+  options.push({ value:'offline', label:`Offline/local (${counts.offline || 0})` });
+
+  if (!options.some(option => option.value === state.source)) state.source = 'all';
+  const signature = JSON.stringify(options);
+  if (select.dataset.signature !== signature) {
+    select.innerHTML = options.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join('');
+    select.dataset.signature = signature;
+  }
+  select.value = state.source;
+}
 
 function itemCard(item) {
   const type = extType(item), pct = percentFor(item), thumb = thumbUrl(item);
@@ -1012,7 +1082,7 @@ function filtered() {
     if (state.filter === 'new' && !isNewItem(item)) return false;
     if (state.filter === 'pdf' && t !== 'pdf') return false;
     if (state.filter === 'comic' && !['comic','pages'].includes(t)) return false;
-    if (state.search && !normalizeText(`${item.name} ${item.folderPath || ''}`).includes(state.search)) return false;
+    if (state.search && !normalizeText(`${item.name} ${item.seriesTitle || ''} ${item.folderPath || ''} ${item.externalSourceName || ''} ${item.issueNumber ?? ''}`).includes(state.search)) return false;
     return true;
   });
   arr.sort((a, b) => state.sort === 'name' ? naturalSort(a.name, b.name)
@@ -1056,6 +1126,7 @@ function updateLibraryStats() {
 }
 function render() {
   updateLibraryStats();
+  renderSourceOptions();
   renderContinueRail();
   renderFeaturedCarousel();
   renderCategoryChips();
