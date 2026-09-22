@@ -2665,7 +2665,7 @@ function schedulePdfVerticalQualityUpgrade(index) {
 function updateVerticalPosition() {
   if (!isVerticalMode() || !state.pages.length) return;
   const rootRect = $('#readerBody').getBoundingClientRect(); let best = state.page; let dist = Infinity;
-  for (const slot of $('.page-slot')) {
+  for (const slot of $$('.page-slot')) {
     const d = Math.abs(slot.getBoundingClientRect().top - rootRect.top);
     if (d < dist) { dist = d; best = Number(slot.dataset.i); }
   }
