@@ -1,0 +1,25 @@
+name: Validate Manga-HQ-hub
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate app
+        run: npm test
+      - name: Validate connected acervo
+        continue-on-error: true
+        run: npm run validate:acervo
