@@ -1,0 +1,33 @@
+import fs from 'node:fs';
+
+const VERSION = '0.2.8';
+const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const assert = (condition, message) => {
+  if (!condition) {
+    console.error(`FAIL: ${message}`);
+    process.exitCode = 1;
+  }
+};
+
+const app = read('js/app.js');
+const css = read('css/app.css');
+const index = read('index.html');
+const config = read('config.js');
+const sw = read('sw.js');
+const manifest = JSON.parse(read('manifest.webmanifest'));
+const pkg = JSON.parse(read('package.json'));
+
+assert(pkg.version === VERSION, 'package.json version');
+assert(config.includes(`appVersion: '${VERSION}'`), 'config version');
+assert(index.includes(`app.js?v=${VERSION}`), 'versioned app.js');
+assert(index.includes(`app.css?v=${VERSION}`), 'versioned app.css');
+assert(sw.includes(`v${VERSION}`), 'service worker cache version');
+assert(sw.includes(`app.js?v=${VERSION}`), 'service worker precaches versioned JS');
+assert(sw.includes(`app.css?v=${VERSION}`), 'service worker precaches versioned CSS');
+assert(!css.includes('\\\\n'), 'CSS must not contain literal \\n sequences');
+assert(!app.includes('LOCAL_RUNTIME_URLS'), 'no references to missing local vendor runtimes');
+assert(app.includes("import('./modules/offline-webp.js')"), 'WebP offline module wired');
+assert(index.includes('Content-Security-Policy'), 'CSP meta is present');
+assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
+
+if (!process.exitCode) console.log('Smoke validation OK');
