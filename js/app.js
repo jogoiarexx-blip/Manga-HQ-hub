@@ -86,7 +86,7 @@ const state = {
 const favorites = new Set(readJson(LS.fav, []));
 const progress = readJson(LS.progress, {});
 const bookmarks = readJson(LS.bookmarks, {});
-const displayPrefs = { brightness:100, contrast:100, sepia:0, lowRes:'auto', ...readJson(LS.display, {}) };
+const displayPrefs = { brightness:100, contrast:100, sepia:0, lowRes:'auto', mobileReading:'auto', ...readJson(LS.display, {}) };
 const itemReaderPrefs = readJson(LS.itemPrefs, {});
 const firstSeen = readJson(LS.firstSeen, {});
 const prefs = { defaultMode: 'spread', direction: 'ltr', performance: 'auto', autoScrollSpeed: 46, keepZoom: false, ...readJson(LS.prefs, {}) };
@@ -192,6 +192,117 @@ function refreshLowResFilters() {
   }
 }
 
+function mobileReadingMode() {
+  const value = String(displayPrefs.mobileReading || 'auto');
+  return ['off','auto','125','150','175','200'].includes(value) ? value : 'auto';
+}
+function mobileReadingScaleFor(index, width = 0, height = 0) {
+  if (!performanceProfile().mobile) return 1;
+  const mode = mobileReadingMode();
+  if (mode === 'off') return 1;
+  if (mode !== 'auto') return Math.max(1, Number(mode) / 100);
+
+  const type = extType(state.current || {});
+  const dims = width && height ? { width:Number(width), height:Number(height) } : pageDimensions(index);
+  if (type !== 'pdf' && pageLooksLowResolution(dims.width, dims.height)) return 1.7;
+
+  const w = Number(dims.width || 0), h = Number(dims.height || 0);
+  const tallPage = w > 0 && h > 0 ? h / w >= 1.28 : true;
+  return tallPage ? 1.35 : 1.15;
+}
+function clearMobileReadingScale(el) {
+  if (!el) return;
+  el.classList.remove('mobile-reading-enlarged');
+  el.style.removeProperty('--mobile-reading-scale');
+  el.style.removeProperty('width');
+  el.style.removeProperty('max-width');
+  el.style.removeProperty('height');
+}
+function applyMobileReadingScaleToImage(img, index, width = 0, height = 0) {
+  if (!img) return 1;
+  if (!performanceProfile().mobile || effectiveMode() === 'spread') {
+    img.dataset.mobileBaseScale = '1';
+    img.classList.remove('mobile-reading-enlarged');
+    img.style.removeProperty('--mobile-reading-scale');
+    return 1;
+  }
+  const scale = mobileReadingScaleFor(index, width, height);
+  img.dataset.mobileBaseScale = String(scale);
+  img.style.setProperty('--mobile-reading-scale', String(scale));
+  img.classList.toggle('mobile-reading-enlarged', scale > 1.01);
+  return scale;
+}
+function applyMobileReadingScaleToSlot(slot, index, width = 0, height = 0) {
+  if (!slot) return 1;
+  if (!performanceProfile().mobile || !isVerticalMode()) {
+    slot.classList.remove('mobile-reading-slot');
+    slot.style.removeProperty('--mobile-reading-scale');
+    return 1;
+  }
+  const scale = mobileReadingScaleFor(index, width, height);
+  slot.style.setProperty('--mobile-reading-scale', String(scale));
+  slot.classList.toggle('mobile-reading-slot', scale > 1.01);
+  return scale;
+}
+function alignMobileReadingX() {
+  if (!performanceProfile().mobile || !isVerticalMode()) return;
+  const root = $('#readerBody');
+  if (!root || root.scrollWidth <= root.clientWidth + 2) return;
+  root.scrollLeft = state.direction === 'rtl' ? Math.max(0, root.scrollWidth - root.clientWidth) : 0;
+}
+function refreshMobileReadingScale() {
+  const mode = mobileReadingMode();
+  const root = $('#readerBody');
+  if (!root) return;
+  root.classList.toggle('mobile-reading-active', performanceProfile().mobile && mode !== 'off');
+
+  if (isVerticalMode()) {
+    $('.page-slot', root).forEach(slot => {
+      const index = Number(slot.dataset.i);
+      const img = slot.querySelector('img');
+      const canvas = slot.querySelector('.pdf-page-canvas');
+      const width = img?.naturalWidth || state.pages[index]?.width || canvas?.width || 0;
+      const height = img?.naturalHeight || state.pages[index]?.height || canvas?.height || 0;
+      const scale = applyMobileReadingScaleToSlot(slot, index, width, height);
+      if (img) {
+        img.dataset.mobileBaseScale = String(scale);
+        img.classList.toggle('mobile-reading-enlarged', scale > 1.01);
+      }
+      if (canvas) canvas.classList.toggle('mobile-reading-enlarged', scale > 1.01);
+    });
+  } else if (effectiveMode() === 'page') {
+    root.querySelectorAll('.page-stage img').forEach(img => {
+      const index = state.page;
+      applyMobileReadingScaleToImage(img, index, img.naturalWidth, img.naturalHeight);
+    });
+  }
+
+  const select = $('#mobileReadingSelect');
+  if (select) select.value = mode;
+  const status = $('#mobileReadingStatus');
+  if (status) {
+    if (!performanceProfile().mobile) status.textContent = 'A ampliação móvel só é aplicada em telas pequenas.';
+    else if (mode === 'off') status.textContent = 'Ampliação desligada • página usa 100% da largura.';
+    else if (mode === 'auto') status.textContent = 'Automático • scans pequenos podem abrir até 170% para deixar os balões maiores.';
+    else status.textContent = `Ampliação fixa em ${mode}% • arraste para os lados para acompanhar a página.`;
+  }
+}
+function setMobileReadingMode(value) {
+  displayPrefs.mobileReading = ['off','auto','125','150','175','200'].includes(String(value)) ? String(value) : 'auto';
+  saveDisplayPrefs();
+  refreshMobileReadingScale();
+  if (isVerticalMode()) {
+    requestAnimationFrame(() => {
+      alignMobileReadingX();
+      updateVerticalPosition();
+    });
+  } else if (isPagedMode() && extType(state.current || {}) !== 'pdf') {
+    applyImageZoomWithoutRender(state.zoom);
+  } else if (isPagedMode() && extType(state.current || {}) === 'pdf') {
+    renderReaderPages().catch(() => {});
+  }
+}
+
 function applyDisplayPrefs() {
   const reader = $('#reader'); if (!reader) return;
   reader.style.setProperty('--reader-brightness', `${Number(displayPrefs.brightness || 100)}%`);
@@ -202,10 +313,12 @@ function applyDisplayPrefs() {
   if ($('#contrastRange')) $('#contrastRange').value = String(displayPrefs.contrast || 100);
   if ($('#sepiaRange')) $('#sepiaRange').value = String(displayPrefs.sepia || 0);
   if ($('#lowResModeSelect')) $('#lowResModeSelect').value = lowResMode();
+  if ($('#mobileReadingSelect')) $('#mobileReadingSelect').value = mobileReadingMode();
   if ($('#brightnessValue')) $('#brightnessValue').textContent = `${displayPrefs.brightness || 100}%`;
   if ($('#contrastValue')) $('#contrastValue').textContent = `${displayPrefs.contrast || 100}%`;
   if ($('#sepiaValue')) $('#sepiaValue').textContent = `${displayPrefs.sepia || 0}%`;
   refreshLowResFilters();
+  refreshMobileReadingScale();
 }
 function setDisplayPref(name, value) {
   displayPrefs[name] = Number(value); saveDisplayPrefs(); applyDisplayPrefs();
@@ -1987,7 +2100,8 @@ async function renderPdfInto(container, index, token, vertical = false) {
   let scale = availableWidth / base.width;
   if (!vertical && state.fit === 'contain') scale = Math.min(scale, availableHeight / base.height);
   if (!vertical && state.fit === 'height') scale = availableHeight / base.height;
-  scale = Math.max(.25, Math.min(4, scale * (vertical ? 1 : state.zoom)));
+  const mobileReadingScale = performanceProfile().mobile && (vertical || effectiveMode() === 'page') ? mobileReadingScaleFor(index, base.width, base.height) : 1;
+  scale = Math.max(.25, Math.min(4, scale * (vertical ? mobileReadingScale : state.zoom * mobileReadingScale)));
   const viewport = page.getViewport({ scale });
   let dpr = Math.min(profile.pdfDpr, window.devicePixelRatio || 1);
   const estimatedPixels = viewport.width * viewport.height * dpr * dpr;
@@ -2014,7 +2128,7 @@ async function renderPdfInto(container, index, token, vertical = false) {
   container.innerHTML = ''; container.appendChild(canvas);
   applyLowResFilterToElement(canvas, index, canvas.width, canvas.height);
   refreshLowResFilters();
-  if (vertical) { container.style.aspectRatio = `${viewport.width}/${viewport.height}`; if (index === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); }
+  if (vertical) { container.style.aspectRatio = `${base.width}/${base.height}`; container.style.minHeight='0'; applyMobileReadingScaleToSlot(container,index,base.width,base.height); if (index === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); }
 }
 
 function flipbookAnimationClass() {
@@ -2179,7 +2293,10 @@ function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
         }
       }
       applyLowResFilterToElement(img, index, img.naturalWidth, img.naturalHeight);
+      applyMobileReadingScaleToImage(img, index, img.naturalWidth, img.naturalHeight);
+      applyImageZoomWithoutRender(state.zoom);
       refreshLowResFilters();
+      refreshMobileReadingScale();
     }, { once:true });
     img.addEventListener('error', () => {
       const index = indexes[n] ?? state.page;
@@ -2257,7 +2374,7 @@ async function renderReaderPages() {
       if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
     }
   }
-  updateProgress(); updatePageControls(); refreshLowResFilters();
+  updateProgress(); updatePageControls(); refreshLowResFilters(); refreshMobileReadingScale();
 }
 
 function setupVerticalObserver() {
@@ -2288,7 +2405,7 @@ async function loadVerticalSlot(slot) {
     const url = await getPageUrl(i);
     if (!slot.isConnected) return;
     const img = new Image(); img.alt = `Página ${i + 1}`; img.loading = 'lazy'; img.decoding = 'async'; img.fetchPriority = 'low'; img.src = url;
-    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); refreshLowResFilters(); if (i === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); };
+    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; slot.style.minHeight = '0'; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); const scale=applyMobileReadingScaleToSlot(slot, i, img.naturalWidth, img.naturalHeight); img.dataset.mobileBaseScale=String(scale); img.classList.toggle('mobile-reading-enlarged',scale>1.01); refreshLowResFilters(); refreshMobileReadingScale(); if (i === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); };
     img.onerror = () => {
       const entry = state.archive?.entries?.[i];
       if (state.archive?.type === 'drive-pages' && entry?.id) {
@@ -2777,8 +2894,9 @@ $('#brightnessRange')?.addEventListener('input', e => setDisplayPref('brightness
 $('#contrastRange')?.addEventListener('input', e => setDisplayPref('contrast', e.target.value));
 $('#sepiaRange')?.addEventListener('input', e => setDisplayPref('sepia', e.target.value));
 $('#lowResModeSelect')?.addEventListener('change', e => setLowResMode(e.target.value));
+$('#mobileReadingSelect')?.addEventListener('change', e => setMobileReadingMode(e.target.value));
 $('#nightProfileBtn')?.addEventListener('click', () => { displayPrefs.brightness=78; displayPrefs.contrast=92; displayPrefs.sepia=12; saveDisplayPrefs(); applyDisplayPrefs(); });
-$('#resetDisplayBtn')?.addEventListener('click', () => { displayPrefs.brightness=100; displayPrefs.contrast=100; displayPrefs.sepia=0; displayPrefs.lowRes='auto'; saveDisplayPrefs(); applyDisplayPrefs(); });
+$('#resetDisplayBtn')?.addEventListener('click', () => { displayPrefs.brightness=100; displayPrefs.contrast=100; displayPrefs.sepia=0; displayPrefs.lowRes='auto'; displayPrefs.mobileReading='auto'; saveDisplayPrefs(); applyDisplayPrefs(); });
 $('#immersiveBtn')?.addEventListener('click', () => setImmersive());
 $('#fitBtn').addEventListener('click', async () => {
   const fits=['contain','width','height']; state.fit=fits[(fits.indexOf(state.fit)+1)%fits.length]; persistCurrentReaderPrefs(); updateReaderPrefsUI(); await renderReaderPages();
@@ -2800,12 +2918,14 @@ function applyImageZoomWithoutRender(zoomValue = state.zoom) {
   cancelAnimationFrame(state.imageZoomRaf || 0);
   state.imageZoomRaf = requestAnimationFrame(() => {
     stage.querySelectorAll(':scope > img, .flipbook-page > img').forEach(img => {
-      if (effectiveZoom === 1) {
+      const baseScale = effectiveMode() === 'page' ? Number(img.dataset.mobileBaseScale || 1) : 1;
+      const combined = effectiveZoom * Math.max(1, baseScale);
+      if (combined <= 1.001) {
         img.style.removeProperty('width');
         img.style.removeProperty('max-width');
         img.style.removeProperty('height');
       } else {
-        img.style.width = `${zoom}%`;
+        img.style.width = `${Math.round(combined * 100)}%`;
         img.style.maxWidth = 'none';
         img.style.height = 'auto';
       }
@@ -3090,7 +3210,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.9', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.10', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
