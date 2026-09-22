@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.2.8 */
+/* Manga-HQ-hub reader styles — v0.2.9 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -507,7 +507,7 @@
 }
 
 
-/* Manga-HQ-hub v0.2.8 — dual mobile reader */
+/* Manga-HQ-hub v0.2.9 — dual mobile reader */
 .reader-body.page-mode{
   overflow:auto;
   scrollbar-width:none;
@@ -592,4 +592,58 @@
   }
   .reader-mode-spread .flipbook-page-number{display:none}
   .reader-mode-spread .flipbook-corner-hint{opacity:.16}
+}
+
+
+/* Manga-HQ-hub v0.2.9 — leitura refinada */
+.flipbook-stage.single-page{
+  justify-content:center;
+  gap:0!important;
+  background:transparent;
+  box-shadow:none;
+}
+.flipbook-stage.single-page::before{display:none}
+.flipbook-stage.single-page>.flipbook-page,
+.flipbook-stage.single-page>.spread-page{
+  flex:0 1 min(68%,860px)!important;
+  width:min(68%,860px)!important;
+  max-width:min(68%,860px)!important;
+  margin-inline:auto!important;
+  transform-origin:center center!important;
+}
+.flipbook-stage.single-page .flipbook-corner-hint{opacity:.12}
+.reader-body.is-zoomed{
+  overscroll-behavior:contain;
+  scroll-behavior:auto;
+}
+.reader-body.is-zoomed img,
+.reader-body.is-zoomed canvas{
+  user-select:none;
+  -webkit-user-drag:none;
+}
+@media(max-width:850px){
+  .flipbook-stage.single-page>.flipbook-page,
+  .flipbook-stage.single-page>.spread-page{
+    flex-basis:min(94%,760px)!important;
+    width:min(94%,760px)!important;
+    max-width:min(94%,760px)!important;
+  }
+  .reader-body.is-zoomed{
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+}
+@media(max-width:650px) and (orientation:portrait){
+  .flipbook-stage.single-page>.flipbook-page,
+  .flipbook-stage.single-page>.spread-page{
+    width:96%!important;
+    max-width:96%!important;
+  }
+  .flipbook-stage.single-page img,
+  .flipbook-stage.single-page .pdf-page-canvas{
+    width:100%!important;
+    max-width:100%!important;
+    height:auto!important;
+    max-height:calc(100dvh - 108px)!important;
+    object-fit:contain;
+  }
 }
