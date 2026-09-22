@@ -1,54 +1,59 @@
-# Manga-HQ-hub v0.2.7
+# Manga-HQ-hub v0.2.8
 
-Hub de mangás e HQs com acervo WebP conectado e leitor integrado.
+Leitor de mangás e HQs para navegador e PWA, com acervo WebP conectado e suporte a PDF, CBR, CBZ, RAR e ZIP.
 
-## Versão atual
+## Leitor
 
-**0.2.7** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
+- Página única, Flipbook de duas páginas, Vertical e Webtoon.
+- Leitura LTR/RTL.
+- Zoom, ajuste de largura/altura, brilho, contraste e sépia.
+- Swipe, toque, teclado, pinch zoom e arraste do Flipbook.
+- Detecção de páginas panorâmicas no acervo WebP.
+- PDF com limite adaptativo de pixels para reduzir uso de RAM.
+- Cancelamento de renderizações antigas ao navegar rapidamente.
+- Miniaturas carregadas sob demanda por proximidade da tela.
 
-## Recursos atuais
+## Celular
 
-- acervo WebP conectado ao Hub;
-- leitura direta das edições publicadas no acervo;
-- modo Flipbook com duas páginas, lombada central e animação de virada;
-- arrastar a página com mouse ou toque para virar de forma interativa;
-- duas páginas também no celular em modo retrato;
-- pré-carregamento do par anterior e seguinte para reduzir espera;
-- números de página e acabamento visual de cantos/lombada;
-- interface mobile refinada com busca compacta, filtros recolhíveis e áreas de toque maiores;
-- leitor mobile com barra inferior simplificada e controles em painel;
-- carregamento inicial e miniaturas reduzidos no celular para melhorar desempenho;
-- leitura de PDF, CBR, CBZ, RAR e ZIP;
-- abertura de arquivos locais;
-- modos página, dupla, vertical e webtoon;
-- leitura RTL/LTR;
-- progresso, favoritos e marcadores;
-- biblioteca offline;
-- interface responsiva para PC e celular;
-- PWA e armazenamento local.
+- Cache de páginas reduzido conforme memória e tamanho da tela.
+- Pré-carregamento adaptado à conexão e ao modo de economia de dados.
+- Página única otimizada sem reconstruir o leitor a cada zoom.
+- Flipbook com contenção de layout e animações mais leves.
+- Limite mais conservador para CBR/CBZ grandes em aparelhos móveis.
+- Download de arquivos grandes evita cópia integral extra quando o tamanho recebido é conhecido.
+
+## Offline e PWA
+
+- Progresso, favoritos, marcadores e preferências salvos localmente.
+- PDF/CBR/CBZ/RAR podem ser salvos offline quando a fonte permite download.
+- Edições WebP publicadas com `manifest.json` podem ser salvas completas offline, página por página.
+- O Service Worker usa catálogo e manifestos em modo network-first para detectar novas HQs sem exigir duas atualizações.
+- Motores PDF.js, JSZip e UnRAR são aquecidos e armazenados pelo cache do PWA após a primeira conexão.
+- O app não tenta mais carregar arquivos `vendor/` inexistentes.
+
+## Estrutura
+
+- `js/app.js` — aplicação principal.
+- `js/modules/offline-webp.js` — cache offline das edições WebP.
+- `css/app.css` — interface geral.
+- `css/reader.css` — estilos específicos do leitor.
+- `sw.js` — PWA, cache e estratégias de rede.
+- `tests/` — smoke test e validação do acervo.
+- `.github/workflows/validate.yml` — validação automática a cada alteração na `main`.
 
 ## Acervo conectado
 
-Manga HQ Acervo:
-https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/
+O Hub usa o catálogo publicado em:
 
+https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/catalogo.json
 
-### v0.2.7 — otimização de leitura no celular
-- limite adaptativo de pixels para PDFs, reduzindo uso de RAM e travamentos;
-- pré-carregamento em segundo plano, respeitando economia de dados e conexões lentas;
-- cache menor em aparelhos compactos;
-- liberação de canvas/imagens ao trocar de página;
-- páginas panorâmicas do acervo detectadas pelo manifesto e exibidas sozinhas;
-- navegação cancela renderização PDF anterior ao avançar rapidamente;
-- Flipbook mobile mais leve, mantendo duas páginas quando apropriado.
+Itens externos recebem uma data local de primeira detecção, permitindo que o filtro **Novos** funcione mesmo quando o catálogo antigo não possui `addedAt`.
 
+## Validação
 
-### v0.2.7 — Flipbook e página única no celular
-- zoom de imagens sem reconstruir o leitor inteiro;
-- evita rerender ao abrir/fechar a barra do navegador no celular;
-- página única usa toda a área útil e permite pan suave quando ampliada;
-- Flipbook mantém duas páginas com contenção de layout e animação mais leve;
-- swipe no modo página única responde com gesto menor;
-- páginas panorâmicas não iniciam dobra/arraste de folha;
-- troca de modo restaura zoom e posição para evitar estados pesados;
-- decodificação da página visível priorizada antes do pré-carregamento.
+```bash
+npm test
+npm run validate:acervo
+```
+
+A validação principal verifica sintaxe, versão, PWA, CSP, arquivos de estilo e integração do módulo offline. A validação remota confere IDs duplicados, campos obrigatórios e contagem de páginas dos manifestos.
