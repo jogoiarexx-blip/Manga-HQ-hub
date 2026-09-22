@@ -459,7 +459,13 @@ document.addEventListener('error', event => {
 function uniqueItems(items) {
   return [...new Map(items.filter(x => x?.id && x?.name).map(x => [x.id, { ...x, size: Number(x.size || 0) }])).values()];
 }
+
+const generatedPdfCovers = new Map();
+const pendingPdfCovers = new Map();
+
 function thumbUrl(item) {
+  const generated = generatedPdfCovers.get(item?.id);
+  if (generated) return generated;
   if (item.coverUrl) return item.coverUrl;
   if (item.localFile && !item.thumbnailLink) return '';
   if (extType(item) === 'pages' && item.coverPageId) return item.thumbnailLink || `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.coverPageId)}&sz=w420`;
@@ -1069,6 +1075,7 @@ function render() {
     more.classList.toggle('hidden', left <= 0);
     more.textContent = left > 0 ? `Carregar mais (${left} restantes)` : 'Carregar mais';
   }
+  hydratePdfCovers(visible);
 }
 
 function setReaderButtons(type) {
@@ -1235,6 +1242,61 @@ async function loadPdfJs() {
     });
   }
   return pdfjsModulePromise;
+}
+
+async function generatePdfCover(item) {
+  if (!item?.id || extType(item) !== 'pdf' || item.coverUrl || !item.fileUrl) return '';
+  if (generatedPdfCovers.has(item.id)) return generatedPdfCovers.get(item.id);
+  if (pendingPdfCovers.has(item.id)) return pendingPdfCovers.get(item.id);
+
+  const job = (async () => {
+    const pdfjs = await loadPdfJs();
+    const task = pdfjs.getDocument({
+      url: item.fileUrl,
+      disableAutoFetch: true,
+      disableStream: false,
+      disableRange: false
+    });
+    let doc = null;
+    try {
+      doc = await task.promise;
+      const page = await doc.getPage(1);
+      const initial = page.getViewport({ scale: 1 });
+      const targetWidth = performanceProfile().mobile ? 300 : 420;
+      const scale = Math.max(.2, Math.min(1.5, targetWidth / Math.max(1, initial.width)));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(viewport.width));
+      canvas.height = Math.max(1, Math.round(viewport.height));
+      const ctx = canvas.getContext('2d', { alpha:false });
+      await page.render({ canvasContext:ctx, viewport }).promise;
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', .84))
+        || await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .86));
+      if (!blob) return '';
+      const url = URL.createObjectURL(blob);
+      const previous = generatedPdfCovers.get(item.id);
+      if (previous?.startsWith?.('blob:')) URL.revokeObjectURL(previous);
+      generatedPdfCovers.set(item.id, url);
+      return url;
+    } finally {
+      await doc?.destroy?.().catch(() => {});
+    }
+  })().finally(() => pendingPdfCovers.delete(item.id));
+
+  pendingPdfCovers.set(item.id, job);
+  return job;
+}
+
+function hydratePdfCovers(items = state.items) {
+  const targets = (items || []).filter(item =>
+    extType(item) === 'pdf' && item.fileUrl && !item.coverUrl &&
+    !generatedPdfCovers.has(item.id) && !pendingPdfCovers.has(item.id)
+  ).slice(0, 8);
+  if (!targets.length) return;
+
+  Promise.allSettled(targets.map(generatePdfCover)).then(results => {
+    if (results.some(result => result.status === 'fulfilled' && result.value)) render();
+  });
 }
 async function openPdf(item, token) {
   if (token !== state.openToken) return;
@@ -2087,10 +2149,7 @@ async function cleanupReaderData() {
   state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
 }
 async function closeReader(fromHistory = false) {
-  if (!fromHistory && state.readerHistoryActive && history.state?.mhqrReader) {
-    history.back();
-    return;
-  }
+  const shouldGoBack = !fromHistory && state.readerHistoryActive && history.state?.mhqrReader;
   state.readerHistoryActive = false;
   closeReaderControls();
   $('#readerDisplayPanel')?.classList.add('hidden');
@@ -2100,10 +2159,14 @@ async function closeReader(fromHistory = false) {
   await cleanupReaderData();
   $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true');
   document.body.style.overflow = ''; state.current = null; state.verticalRestore = null; $('#readerBody').innerHTML = ''; render();
+
+  if (shouldGoBack) {
+    try { history.back(); } catch {}
+  }
 }
 
 window.addEventListener('popstate', () => {
-  if (!$('#reader')?.classList.contains('hidden') && state.readerHistoryActive && !history.state?.mhqrReader) {
+  if (!$('#reader')?.classList.contains('hidden') && state.readerHistoryActive) {
     state.readerHistoryActive = false;
     closeReader(true).catch(() => {});
   }
