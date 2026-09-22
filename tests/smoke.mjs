@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.5';
+const VERSION = '0.3.6';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -48,6 +48,11 @@ assert(app.includes('Promise.all(jobs)'), 'external catalogs load in parallel');
 assert(app.includes('failedSourceIds'), 'failed external source fallback is present');
 assert(sw.includes('REMOTE_IMAGE_CACHE'), 'remote image cache is present');
 assert(sw.includes('RAW_GITHUB_ORIGIN'), 'raw GitHub routing is present');
+assert(index.includes('alphabetIndex'), 'alphabet navigation exists');
+assert(app.includes('function jumpToCatalogLetter'), 'alphabet jump logic exists');
+assert(app.includes('function renderAlphabeticalCards'), 'alphabet sections exist');
+assert(app.includes("classList.toggle('mobile-fullbleed'"), 'mobile full-bleed reader is wired');
+assert(readerCss.includes('.reader.mobile-fullbleed'), 'mobile full-bleed CSS exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
