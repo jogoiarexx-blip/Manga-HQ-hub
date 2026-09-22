@@ -1,6 +1,14 @@
-# Manga-HQ-hub v0.3.1
+# Manga-HQ-hub v0.3.4
 
 Leitor de mangás e HQs para navegador e PWA, com acervo externo conectado e suporte a WebP por páginas, PDF, CBR, CBZ, RAR e ZIP.
+
+## v0.3.4 — Acervo 2 integrado
+
+- Adicionado o **Manga HQ Acervo 2** como segunda fonte externa.
+- Acervo 2 validado com PDFs e capas WebP.
+- Catálogos externos continuam usando `cache: no-store`.
+- Versionamento de CSS/JS sincronizado com o Service Worker para evitar arquivos antigos presos em cache.
+- Mantida compatibilidade total com o Acervo 1.
 
 ## v0.3.1 — navegação mobile + compatibilidade do acervo externo
 
