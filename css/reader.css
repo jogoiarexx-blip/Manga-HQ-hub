@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.2.10 */
+/* Manga-HQ-hub reader styles — v0.3.1 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -507,7 +507,7 @@
 }
 
 
-/* Manga-HQ-hub v0.2.10 — dual mobile reader */
+/* Manga-HQ-hub v0.3.1 — dual mobile reader */
 .reader-body.page-mode{
   overflow:auto;
   scrollbar-width:none;
@@ -595,7 +595,7 @@
 }
 
 
-/* Manga-HQ-hub v0.2.10 — leitura refinada */
+/* Manga-HQ-hub v0.3.1 — leitura refinada */
 .flipbook-stage.single-page{
   justify-content:center;
   gap:0!important;
@@ -649,7 +649,7 @@
 }
 
 
-/* Manga-HQ-hub v0.2.10 — mobile navigation */
+/* Manga-HQ-hub v0.3.1 — mobile navigation */
 .reader-body{
   overscroll-behavior:contain;
 }
