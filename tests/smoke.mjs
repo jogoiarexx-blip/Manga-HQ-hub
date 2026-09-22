@@ -80,7 +80,7 @@ assert(app.includes("pdfQuality:'auto'"), 'automatic PDF quality default exists'
 assert(readerCss.includes('.pdf-pinch-preview'), 'PDF pinch preview CSS exists');
 assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
-assert(app.includes("for (const slot of $('.page-slot'))"), 'vertical slot iteration is correct');
+assert(app.includes("for (const slot of $$('.page-slot'))"), 'vertical slot iteration is correct');
 assert(!app.includes("$('.page-slot', root).forEach"), 'vertical mobile scaling uses querySelectorAll helper');
 assert(app.includes("appVersion: '0.3.12'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
