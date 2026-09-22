@@ -62,3 +62,34 @@ https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/catalogo.json
 npm test
 npm run validate:acervo
 ```
+
+
+## Formatos do acervo externo
+
+O Hub aceita WebP por páginas e PDF no mesmo `catalogo.json`.
+
+Exemplo WebP:
+
+```json
+{
+  "id": "hq-1",
+  "title": "HQ #1",
+  "format": "webp-pages",
+  "cover": "colecoes/hq/01/001.webp",
+  "manifest": "colecoes/hq/01/manifest.json"
+}
+```
+
+Exemplo PDF:
+
+```json
+{
+  "id": "hq-29",
+  "title": "HQ #29",
+  "format": "pdf",
+  "file": "colecoes/hq/29/HQ-29.pdf",
+  "cover": "colecoes/hq/29/capa.webp"
+}
+```
+
+PDFs externos são abertos pelo PDF.js do próprio Manga-HQ-hub e também podem ser salvos para leitura offline quando o servidor permite CORS.
