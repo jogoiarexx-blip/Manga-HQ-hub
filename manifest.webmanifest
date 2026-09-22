@@ -32,5 +32,10 @@
       "short_name": "Biblioteca",
       "url": "./"
     }
+  ],
+  "id": "./",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
   ]
 }
