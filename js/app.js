@@ -227,7 +227,17 @@ async function refreshOfflineIndex() {
       const req = store.getAll(); req.onsuccess = () => resolve(req.result || []); req.onerror = () => reject(req.error);
     });
     state.offlineIds = new Set(rows.map(r => r.id));
-    state.offlineMeta = new Map(rows.map(r => [r.id, { id:r.id, name:r.name, size:Number(r.size||r.blob?.size||0), mimeType:r.mimeType, modifiedTime:r.modifiedTime, folderPath:r.folderPath, resourceKey:r.resourceKey, savedAt:r.savedAt, offline:true }]));
+    state.offlineMeta = new Map(rows.map(r => {
+      const meta = {
+        id:r.id, name:r.name, size:Number(r.size || r.blob?.size || 0), mimeType:r.mimeType,
+        modifiedTime:r.modifiedTime, folderPath:r.folderPath, resourceKey:r.resourceKey,
+        savedAt:r.savedAt, offline:true, kind:r.kind || 'file', readerType:r.readerType,
+        manifestUrl:r.manifestUrl, coverUrl:r.coverUrl, sourceUrl:r.sourceUrl,
+        externalSourceId:r.externalSourceId, externalSourceName:r.externalSourceName,
+        seriesTitle:r.seriesTitle, issueNumber:r.issueNumber, pageCount:Number(r.pageCount || 0)
+      };
+      return [r.id, meta];
+    }));
     return rows;
   } catch (err) {
     console.warn('Offline storage indisponível:', err);
@@ -241,8 +251,15 @@ async function getOfflineRecord(id) {
   });
 }
 async function deleteOfflineRecord(id) {
+  const rec = await getOfflineRecord(id).catch(() => null);
+  if (rec?.kind === 'web-pages' && Array.isArray(rec.cachedUrls)) {
+    try {
+      const mod = await loadOfflineWebpModule();
+      await mod.removeWebPageEditionCache(rec.cachedUrls);
+    } catch (err) { console.warn('Falha ao remover cache WebP offline:', err); }
+  }
   await offlineDbAction('readwrite', (store) => store.delete(id));
-  state.offlineIds.delete(id); state.offlineMeta.delete(id);
+  state.offlineIds.delete(id); state.offlineMeta.delete(id); state.offlineProgress.delete(id);
   await updateOfflineStorageInfo(); render();
 }
 async function updateOfflineStorageInfo() {
@@ -253,45 +270,108 @@ async function updateOfflineStorageInfo() {
     const est = await navigator.storage?.estimate?.();
     if (est?.quota) quotaText = ` • navegador: ${bytes(est.usage || 0)} de ${bytes(est.quota)}`;
   } catch {}
-  el.textContent = `${state.offlineIds.size} arquivo(s) • ${bytes(total)} salvos${quotaText}`;
+  el.textContent = `${state.offlineIds.size} item(ns) • ${bytes(total)} salvos${quotaText}`;
 }
 async function ensureOfflineItem(item) {
   if (!item) return item;
   const id = item.offlineOriginId || item.id;
   if (!state.offlineIds.has(id)) return item;
   const rec = await getOfflineRecord(id);
-  if (!rec?.blob) return item;
+  if (!rec) return item;
+  if (rec.kind === 'web-pages') {
+    return {
+      ...item,
+      id,
+      name:rec.name || item.name,
+      mimeType:'application/x-mhqr-web-pages',
+      readerType:'web-pages',
+      manifestUrl:rec.manifestUrl || item.manifestUrl,
+      coverUrl:rec.coverUrl || item.coverUrl,
+      sourceUrl:rec.sourceUrl || item.sourceUrl,
+      externalSourceId:rec.externalSourceId || item.externalSourceId,
+      externalSourceName:rec.externalSourceName || item.externalSourceName,
+      seriesTitle:rec.seriesTitle || item.seriesTitle,
+      issueNumber:rec.issueNumber ?? item.issueNumber,
+      pageCount:Number(rec.pageCount || item.pageCount || 0),
+      offline:true,
+      offlineOriginId:id
+    };
+  }
+  if (!rec.blob) return item;
   return { ...item, id, name: rec.name || item.name, size: rec.size || rec.blob.size, mimeType: rec.mimeType || item.mimeType, localFile: rec.blob, offline: true, offlineOriginId: id };
+}
+function updateOfflineProgressUi(id, done, total) {
+  const pct = total ? Math.max(0, Math.min(100, Math.round(done / total * 100))) : 0;
+  state.offlineProgress.set(id, { done, total, pct });
+  $$('.card[data-id]').forEach(card => {
+    if (card.dataset.id !== id) return;
+    const btn = card.querySelector('[data-action="offline"]');
+    if (btn) btn.textContent = `${pct}%`;
+  });
+  if ((state.current?.offlineOriginId || state.current?.id) === id && $('#offlineCurrentBtn')) {
+    $('#offlineCurrentBtn').textContent = `☁ ${pct}%`;
+  }
 }
 async function saveItemOffline(item) {
   if (!item) return;
   const id = item.offlineOriginId || item.id;
   if (state.offlineBusy.has(id)) return;
-  if (state.offlineIds.has(id)) { toast('Este arquivo já está disponível offline.'); return; }
+  if (state.offlineIds.has(id)) { toast('Este item já está disponível offline.'); return; }
   state.offlineBusy.add(id); render();
   try {
     try { await navigator.storage?.persist?.(); } catch {}
-    let blob;
-    if (item.localFile) blob = item.localFile;
-    else {
-      try {
-        const est = await navigator.storage?.estimate?.();
-        const free = est?.quota ? Math.max(0, Number(est.quota) - Number(est.usage || 0)) : 0;
-        if (free && item.size && Number(item.size) * 1.12 > free) throw new Error(`Espaço insuficiente para salvar offline. Livre: ${bytes(free)}.`);
-      } catch (err) { if (/Espaço insuficiente/.test(err?.message || '')) throw err; }
-      if (!getApiKey()) toast('Preparando cópia offline. Se o Drive bloquear, configure a API Key.');
-      const data = await downloadDriveFile(item, -1, 'offline');
-      blob = new Blob([data], { type: item.mimeType || 'application/octet-stream' });
+    if (extType(item) === 'pages') {
+      if (!item.manifestUrl) throw new Error('Esta fonte de páginas ainda não oferece manifesto para salvamento offline completo.');
+      const controller = new AbortController();
+      state.offlineControllers.set(id, controller);
+      const mod = await loadOfflineWebpModule();
+      const result = await mod.cacheWebPageEdition({
+        manifestUrl:item.manifestUrl,
+        signal:controller.signal,
+        concurrency:performanceProfile().mobile ? 2 : 3,
+        onProgress:({done,total}) => updateOfflineProgressUi(id, done, total)
+      });
+      const record = {
+        id, kind:'web-pages', name:item.name, size:Number(result.size || 0),
+        mimeType:'application/x-mhqr-web-pages', readerType:'web-pages',
+        modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '',
+        manifestUrl:item.manifestUrl, coverUrl:item.coverUrl || '', sourceUrl:item.sourceUrl || '',
+        externalSourceId:item.externalSourceId || '', externalSourceName:item.externalSourceName || '',
+        seriesTitle:item.seriesTitle || '', issueNumber:item.issueNumber ?? null,
+        pageCount:Number(result.pageCount || item.pageCount || 0), cachedUrls:result.cachedUrls,
+        savedAt:Date.now()
+      };
+      await offlineDbAction('readwrite', (store) => store.put(record));
+      state.offlineIds.add(id);
+      state.offlineMeta.set(id, { ...record, cachedUrls:undefined, offline:true });
+    } else {
+      let blob;
+      if (item.localFile) blob = item.localFile;
+      else {
+        try {
+          const est = await navigator.storage?.estimate?.();
+          const free = est?.quota ? Math.max(0, Number(est.quota) - Number(est.usage || 0)) : 0;
+          if (free && item.size && Number(item.size) * 1.12 > free) throw new Error(`Espaço insuficiente para salvar offline. Livre: ${bytes(free)}.`);
+        } catch (err) { if (/Espaço insuficiente/.test(err?.message || '')) throw err; }
+        if (!getApiKey()) toast('Preparando cópia offline. Se o Drive bloquear, configure a API Key.');
+        const data = await downloadDriveFile(item, -1, 'offline');
+        blob = new Blob([data], { type: item.mimeType || 'application/octet-stream' });
+      }
+      const record = { id, kind:'file', name:item.name, size:Number(item.size || blob.size), mimeType:item.mimeType || blob.type, modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '', resourceKey:item.resourceKey || '', savedAt:Date.now(), blob };
+      await offlineDbAction('readwrite', (store) => store.put(record));
+      state.offlineIds.add(id);
+      state.offlineMeta.set(id, { ...record, blob: undefined, offline:true });
     }
-    const record = { id, name:item.name, size:Number(item.size || blob.size), mimeType:item.mimeType || blob.type, modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '', resourceKey:item.resourceKey || '', savedAt:Date.now(), blob };
-    await offlineDbAction('readwrite', (store) => store.put(record));
-    state.offlineIds.add(id);
-    state.offlineMeta.set(id, { ...record, blob: undefined, offline:true });
     toast('Salvo para leitura offline.');
     await updateOfflineStorageInfo();
   } catch (err) {
     if (err?.name !== 'AbortError') toast(`Não foi possível salvar offline: ${err.message}`);
-  } finally { state.offlineBusy.delete(id); render(); }
+  } finally {
+    state.offlineControllers.delete(id);
+    state.offlineBusy.delete(id);
+    state.offlineProgress.delete(id);
+    render();
+  }
 }
 async function toggleOfflineItem(item) {
   const id = item?.offlineOriginId || item?.id; if (!id) return;
@@ -302,14 +382,18 @@ async function toggleOfflineItem(item) {
   }
   if (state.offlineIds.has(id)) {
     if (!confirm(`Remover “${item.name}” da biblioteca offline?`)) return;
-    await deleteOfflineRecord(id); toast('Arquivo removido do offline.');
+    await deleteOfflineRecord(id); toast('Item removido do offline.');
   } else await saveItemOffline(item);
 }
 async function clearOfflineLibrary() {
   for (const c of state.offlineControllers.values()) c.abort();
   state.offlineControllers.clear();
   if (!state.offlineIds.size) { toast('A biblioteca offline já está vazia.'); return; }
-  if (!confirm(`Remover ${state.offlineIds.size} arquivo(s) salvos offline?`)) return;
+  if (!confirm(`Remover ${state.offlineIds.size} item(ns) salvos offline?`)) return;
+  try {
+    const mod = await loadOfflineWebpModule();
+    await mod.clearWebPageOfflineCache();
+  } catch {}
   await offlineDbAction('readwrite', (store) => store.clear());
   await refreshOfflineIndex(); await updateOfflineStorageInfo(); render(); toast('Biblioteca offline limpa.');
 }
