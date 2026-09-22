@@ -1,48 +1,53 @@
-# Manga-HQ-hub v0.3.10
+# Manga-HQ-hub v0.3.11
 
-Leitor/PWA de mangás e HQs com Acervo 1, Acervo 2 e Acervo Marvel.
+Leitor/PWA de mangás e HQs com foco em leitura confortável no celular.
 
-## v0.3.10 — leitura realmente legível no celular
+## v0.3.11 — leitor PDF mobile melhorado
 
-A imagem enviada mostrou que o problema não era só contraste: a página inteira cabia na largura do telefone, deixando os balões pequenos demais, e havia espaço preto desperdiçado antes da página.
+### Nitidez adaptativa
 
-### Zoom móvel de leitura
+O PDF agora usa uma qualidade diferente para a página que está sendo lida e para páginas secundárias.
+
+No celular:
+- a página atual pode usar DPR maior;
+- o limite de pixels continua ativo;
+- Vertical/Webtoon usam qualidade mais leve nas páginas fora do foco;
+- o modo Nítido aumenta a resolução sem renderizar o PDF inteiro em alta qualidade.
+
+### Qualidade PDF
 
 Novo controle em **Aa Visual**:
 
-- **100% / sem ampliação**
-- **Automático**
-- **125%**
-- **150%**
-- **175%**
-- **200%**
+- **Econômico** — menor consumo de RAM e bateria;
+- **Automático** — mais nitidez na página atual e equilíbrio nas demais;
+- **Nítido** — prioriza texto fino e scans pequenos.
 
-No modo **Automático**:
-- scans pequenos detectados como baixa resolução podem abrir em aproximadamente **170%**;
-- páginas normais altas ficam por volta de **135%**;
-- páginas mais largas usam ampliação menor.
+### Zoom e pinch
 
-A página fica maior que a tela e pode ser arrastada lateralmente. Isso aumenta o tamanho real dos balões e letras sem recodificar o arquivo.
+- Pinch em PDF mostra uma prévia instantânea por CSS durante o gesto.
+- O PDF só é rerenderizado em alta qualidade quando os dedos são soltos.
+- O ponto central do gesto é preservado ao finalizar o zoom.
+- Duplo toque continua ampliando no ponto tocado.
 
-### Desempenho
+### PDF no celular
 
-- WebP/JPG/CBR/CBZ usam a mesma imagem já carregada; só muda o tamanho de exibição.
-- Não há IA nem upscale pesado.
-- PDF é rerenderizado maior quando necessário, mas continua limitado pelo orçamento de pixels do leitor.
-- O filtro de baixa resolução continua separado e pode ser usado junto com o zoom móvel.
+- Um PDF novo abre em **Página única** por padrão no celular em retrato.
+- Isso só acontece quando não existe uma preferência anterior para aquele arquivo.
+- Depois que o usuário escolhe Flipbook, Vertical ou Webtoon, essa escolha continua salva.
+- PDFs verticais altos usam ampliação automática maior para deixar balões e letras mais legíveis.
 
-### Correção do espaço preto
+### Carregamento
 
-- Vertical/Webtoon passam a começar no topo.
-- Slots já carregados deixam de manter altura reservada artificial.
-- Primeira página não recebe margem superior extra.
-- O leitor continua usando 100dvw × 100dvh no celular.
+- Em celular/conexão lenta, o PDF.js evita auto-baixar partes desnecessárias do arquivo.
+- Range requests continuam habilitados.
+- O progresso de carregamento é mostrado em porcentagem quando o servidor fornece o tamanho.
+- As páginas anterior e seguinte têm metadados aquecidos em segundo plano, sem renderização pesada.
 
-### Combinação recomendada para scans antigos
+### Memória
 
-- **Baixa resolução: Automático**
-- **Zoom móvel: Automático**
-- Se ainda estiver difícil: **Baixa resolução: Forte** + **Zoom móvel: 175%**
+- Renders verticais fora da janela de leitura podem ser cancelados.
+- Ao fechar/trocar documento, tarefas PDF verticais são canceladas.
+- O orçamento de pixels continua protegendo aparelhos com pouca memória.
 
 ## Acervos
 
