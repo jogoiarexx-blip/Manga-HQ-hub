@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.11 */
+/* Manga-HQ-hub reader styles — v0.3.12 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -1062,4 +1062,61 @@
 }
 @media(prefers-reduced-motion:reduce){
   .pdf-page-canvas.pdf-pinch-preview{transition:none!important}
+}
+
+
+/* Manga-HQ-hub v0.3.12 — PDF sem pisca */
+.reader-body.pdf-stage-pending{
+  position:relative;
+}
+.pdf-stage-staging{
+  position:absolute!important;
+  inset:0!important;
+  width:100%!important;
+  height:100%!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+  z-index:-1!important;
+}
+.pdf-stage-enter{
+  animation:pdf-stage-enter .14s ease-out both;
+}
+@keyframes pdf-stage-enter{
+  from{opacity:.72}
+  to{opacity:1}
+}
+
+/* O botão ✂ Margens agora tem efeito real, mas continua opcional. */
+.reader.trim-margins.reader-mode-page .pdf-page-mount{
+  overflow:hidden!important;
+}
+.reader.trim-margins.reader-mode-page .pdf-page-mount>.pdf-page-canvas{
+  transform:scale(1.065);
+  transform-origin:center center;
+}
+.reader.trim-margins.reader-mode-vertical .pdf-slot{
+  overflow:hidden!important;
+}
+.reader.trim-margins.reader-mode-vertical .pdf-slot>.pdf-page-canvas{
+  width:106%!important;
+  max-width:none!important;
+  margin-left:-3%!important;
+  margin-right:-3%!important;
+}
+
+@media(max-width:850px){
+  .reader.mobile-fullbleed.trim-margins.reader-mode-page .pdf-page-mount{
+    width:100dvw!important;
+    height:100dvh!important;
+  }
+  .reader.mobile-fullbleed.trim-margins.reader-mode-page .pdf-page-mount>.pdf-page-canvas{
+    transform:scale(1.08);
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .pdf-slot[data-loaded="1"]{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 1400px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .pdf-stage-enter{animation:none!important}
 }
