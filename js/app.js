@@ -1085,7 +1085,7 @@ function renderSourceOptions() {
 const CATALOG_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 function alphaLetterFor(item) {
   const text = normalizeText(item?.name || '').toUpperCase().trim();
-  const first = text.match(/[A-Z]/)?.[0] || '#';
+  const first = text.charAt(0);
   return CATALOG_ALPHABET.includes(first) ? first : '#';
 }
 function alphaSectionKey(letter) { return letter === '#' ? 'num' : String(letter || '').toLowerCase(); }
@@ -2593,6 +2593,20 @@ $('#pageRange').addEventListener('input', e => setPage(Number(e.target.value) - 
 $('#pageNumberInput')?.addEventListener('change', e => { const n = Number(e.target.value || 1); setPage(n - 1); });
 $('#pageNumberInput')?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); const n = Number(e.target.value || 1); setPage(n - 1); } });
 $('#loadMoreBtn')?.addEventListener('click', () => { state.renderLimit += performanceProfile().mobile ? 30 : 60; render(); });
+let catalogAutoLoading = false;
+function setupCatalogAutoLoad() {
+  const button = $('#loadMoreBtn');
+  if (!button || !('IntersectionObserver' in window)) return;
+  const observer = new IntersectionObserver(entries => {
+    const entry = entries[0];
+    if (!entry?.isIntersecting || button.classList.contains('hidden') || catalogAutoLoading) return;
+    catalogAutoLoading = true;
+    state.renderLimit += performanceProfile().mobile ? 30 : 60;
+    render();
+    requestAnimationFrame(() => { catalogAutoLoading = false; });
+  }, { root:null, rootMargin:'700px 0px', threshold:0.01 });
+  observer.observe(button);
+}
 $('#modeBtn').addEventListener('click', async () => {
   if (!state.pages.length) return;
   stopAutoScroll();
@@ -2913,7 +2927,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.1', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.6', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -2986,6 +3000,7 @@ window.visualViewport?.addEventListener?.('resize', handleReaderViewportChange, 
 if (storageGet(LS.theme) === 'light') document.documentElement.classList.add('light');
 setNetworkStatus();
 applyDisplayPrefs();
+setupCatalogAutoLoad();
 window.addEventListener('online', () => { setNetworkStatus();
 applyDisplayPrefs(); warmReaderRuntimes().catch(() => {}); });
 window.addEventListener('offline', setNetworkStatus);
