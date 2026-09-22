@@ -452,7 +452,7 @@ function mimeFromName(name) {
 function normalizeText(value) {
   return String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase('pt-BR');
 }
-function naturalSort(a, b) { return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }); }
+function naturalSort(a, b) { return String(a || '').localeCompare(String(b || ''), 'pt-BR', { numeric:true, sensitivity:'base', ignorePunctuation:true }); }
 function shortCover(name) {
   return name.replace(/\.(pdf|cbr|cbz|rar|zip)$/i, '').replace(/\([^)]*\)/g, '').replace(/[-_]+/g, ' ').trim().split(/\s+/).slice(0, 5).join(' ');
 }
