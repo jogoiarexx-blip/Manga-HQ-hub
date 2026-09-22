@@ -354,9 +354,16 @@ async function saveItemOffline(item) {
           const free = est?.quota ? Math.max(0, Number(est.quota) - Number(est.usage || 0)) : 0;
           if (free && item.size && Number(item.size) * 1.12 > free) throw new Error(`Espaço insuficiente para salvar offline. Livre: ${bytes(free)}.`);
         } catch (err) { if (/Espaço insuficiente/.test(err?.message || '')) throw err; }
-        if (!getApiKey()) toast('Preparando cópia offline. Se o Drive bloquear, configure a API Key.');
-        const data = await downloadDriveFile(item, -1, 'offline');
-        blob = new Blob([data], { type: item.mimeType || 'application/octet-stream' });
+
+        if (item.fileUrl) {
+          const response = await fetch(item.fileUrl, { mode:'cors', cache:'no-store' });
+          if (!response.ok) throw new Error(`Arquivo externo: HTTP ${response.status}`);
+          blob = await response.blob();
+        } else {
+          if (!getApiKey()) toast('Preparando cópia offline. Se o Drive bloquear, configure a API Key.');
+          const data = await downloadDriveFile(item, -1, 'offline');
+          blob = new Blob([data], { type: item.mimeType || 'application/octet-stream' });
+        }
       }
       const record = { id, kind:'file', name:item.name, size:Number(item.size || blob.size), mimeType:item.mimeType || blob.type, modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '', resourceKey:item.resourceKey || '', savedAt:Date.now(), blob };
       await offlineDbAction('readwrite', (store) => store.put(record));
@@ -415,9 +422,11 @@ function bytes(n) {
 }
 function extType(item) {
   if (['drive-pages','web-pages'].includes(item?.readerType) || ['application/x-mhqr-pages','application/x-mhqr-web-pages'].includes(item?.mimeType)) return 'pages';
-  const n = (item.name || '').toLowerCase();
-  if (n.endsWith('.pdf')) return 'pdf';
-  if (/\.(cbr|cbz|rar|zip)$/.test(n)) return 'comic';
+  if (item?.readerType === 'pdf' || item?.mimeType === 'application/pdf') return 'pdf';
+  const n = String(item?.name || '').toLowerCase();
+  const fileUrl = String(item?.fileUrl || '').toLowerCase().split(/[?#]/)[0];
+  if (n.endsWith('.pdf') || fileUrl.endsWith('.pdf')) return 'pdf';
+  if (/\.(cbr|cbz|rar|zip)$/.test(n) || /\.(cbr|cbz|rar|zip)$/.test(fileUrl)) return 'comic';
   return 'other';
 }
 function extension(name) { return (name.match(/\.[^.]+$/)?.[0] || '').toLowerCase(); }
@@ -457,6 +466,7 @@ function thumbUrl(item) {
   return item.thumbnailLink || `https://drive.google.com/thumbnail?id=${encodeURIComponent(item.id)}&sz=w420`;
 }
 function driveViewUrl(item) {
+  if (item.fileUrl) return item.fileUrl;
   if (item.sourceUrl) return item.sourceUrl;
   if (extType(item) === 'pages' && item.driveFolderId) return `https://drive.google.com/drive/folders/${encodeURIComponent(item.driveFolderId)}`;
   const u = new URL(`https://drive.google.com/file/d/${encodeURIComponent(item.id)}/view`); if (item.resourceKey) u.searchParams.set('resourcekey', item.resourceKey); return u.href;
@@ -474,6 +484,7 @@ function sanitizeFilename(name) {
 }
 function directDownloadUrl(item) {
   if (!item || item.localFile) return '';
+  if (item.fileUrl) return item.fileUrl;
   const u = new URL('https://drive.usercontent.google.com/download');
   u.searchParams.set('id', item.id);
   u.searchParams.set('export', 'download');
@@ -581,24 +592,38 @@ async function loadExternalCatalogs() {
         const rawId = String(row?.id || row?.title || row?.name || '');
         const name = String(row?.title || row?.name || rawId).trim();
         if (!rawId || !name) continue;
+
+        const format = String(row?.format || row?.readerType || '').toLowerCase();
+        const fileUrl = resolveExternalUrl(siteUrl, row?.file || row?.fileUrl || row?.url || '');
+        const isPdf = format === 'pdf' || String(fileUrl).toLowerCase().split(/[?#]/)[0].endsWith('.pdf');
+        const manifestUrl = resolveExternalUrl(siteUrl, row?.manifest || '');
+        const isPages = !isPdf && (format === 'webp' || format === 'webp-pages' || format === 'pages' || Boolean(manifestUrl));
+
+        if (!isPdf && !isPages) {
+          console.warn('Item externo ignorado por formato desconhecido:', row);
+          continue;
+        }
+
         const stableId = `external:${sourceId}:${rawId}`;
         if (!Number(firstSeen[stableId])) { firstSeen[stableId] = seenNow; firstSeenDirty = true; }
+
         items.push({
           id: stableId,
           name,
-          readerType: 'web-pages',
-          mimeType: 'application/x-mhqr-web-pages',
+          readerType: isPdf ? 'pdf' : 'web-pages',
+          mimeType: isPdf ? 'application/pdf' : 'application/x-mhqr-web-pages',
           pageCount: Number(row?.pageCount || 0),
           coverUrl: resolveExternalUrl(siteUrl, row?.cover || ''),
-          manifestUrl: resolveExternalUrl(siteUrl, row?.manifest || ''),
-          sourceUrl: siteUrl,
+          manifestUrl: isPages ? manifestUrl : '',
+          fileUrl: isPdf ? fileUrl : '',
+          sourceUrl: resolveExternalUrl(siteUrl, row?.sourceUrl || '') || siteUrl,
           externalSourceId: sourceId,
           externalSourceName: sourceName,
           seriesTitle: String(row?.collectionTitle || ''),
           issueNumber: row?.issue ?? null,
           modifiedTime: String(row?.modifiedTime || row?.updatedAt || row?.addedAt || new Date(Number(firstSeen[stableId]) || seenNow).toISOString()),
           folderPath: String(row?.collectionTitle || data?.name || sourceName),
-          size: 0
+          size: Number(row?.size || row?.sizeBytes || 0)
         });
       }
     } catch (err) {
@@ -1215,6 +1240,8 @@ async function openPdf(item, token) {
     const options = { disableAutoFetch: false, disableStream: false, disableRange: false };
     if (item.localFile) {
       options.data = await item.localFile.arrayBuffer();
+    } else if (item.fileUrl) {
+      options.url = item.fileUrl;
     } else {
       const key = getApiKey();
       if (key) {
@@ -1245,7 +1272,7 @@ async function openPdf(item, token) {
   } catch (err) {
     if (token !== state.openToken || err?.name === 'AbortError') return;
     $('#readerLoading').classList.add('hidden');
-    const noKeyHint = !item.localFile && !getApiKey() ? ' Configure a Google Drive API Key para usar o leitor PDF próprio com arquivos do Drive.' : '';
+    const noKeyHint = !item.localFile && !item.fileUrl && !getApiKey() ? ' Configure a Google Drive API Key para usar o leitor PDF próprio com arquivos do Drive.' : '';
     showReaderError('Não foi possível abrir este PDF', `${err.message || err}${noKeyHint}`, !item.localFile);
   }
 }
