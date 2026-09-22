@@ -1,20 +1,22 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.2.7 -->
+<!-- Manga-HQ-hub deploy v0.2.8 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.sh https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net; connect-src 'self' https://esm.sh https://cdn.jsdelivr.net https://www.googleapis.com https://drive.usercontent.google.com https://drive.google.com https://lh3.googleusercontent.com https://*.googleusercontent.com; img-src 'self' data: blob: https://drive.google.com https://lh3.googleusercontent.com https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src https://drive.google.com;" />
   <meta name="theme-color" content="#111217" />
   <meta name="color-scheme" content="dark light" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.2.7</title>
+  <title>Manga-HQ-hub v0.2.8</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.2.7" />
+  <link rel="stylesheet" href="./css/app.css?v=0.2.8" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.2.8" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -247,7 +249,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.2.7"></script>
-  <script type="module" src="./js/app.js?v=0.2.7"></script>
+  <script src="./config.js?v=0.2.8"></script>
+  <script type="module" src="./js/app.js?v=0.2.8"></script>
 </body>
 </html>
