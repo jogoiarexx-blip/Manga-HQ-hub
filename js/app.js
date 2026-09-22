@@ -1601,7 +1601,7 @@ async function renderReaderPages() {
       $('#readerBody').classList.add('page-mode');
       const zoomStyle = state.zoom === 1 ? '' : `style="width:${Math.round(state.zoom * 100)}%;max-width:none;height:auto"`;
       const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
-      const bookClass = spread ? ` flipbook-stage${indexes.length > 1 ? ' two-page' : ' cover-only'}${flipbookAnimationClass()}` : '';
+      const bookClass = spread ? ` flipbook-stage${indexes.length > 1 ? ' two-page' : (isWidePage(indexes[0]) ? ' single-wide' : ' cover-only')}${flipbookAnimationClass()}` : '';
       $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}>`).join('')}</div>`;
       wirePagedImageErrors(indexes);
       if (performanceProfile().prefetch) {
