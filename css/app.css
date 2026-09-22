@@ -1090,3 +1090,91 @@ a{color:inherit}
   }
   .reader-loading .spinner{width:30px;height:30px}
 }
+
+
+/* Manga-HQ-hub v0.2.7 — dual mobile reader */
+.reader-body.page-mode{
+  overflow:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.reader-body.page-mode::-webkit-scrollbar{display:none}
+.reader-body.page-mode.is-zoomed{touch-action:pan-x pan-y pinch-zoom}
+.reader-mode-page .page-stage:not(.spread-stage){
+  width:100%;
+  min-width:100%;
+  min-height:100%;
+  display:grid;
+  place-items:center;
+  align-content:center;
+}
+.reader-mode-page .page-stage:not(.spread-stage)>img{
+  display:block;
+  width:auto;
+  max-width:100%;
+  height:auto;
+  max-height:calc(100dvh - 118px);
+  object-fit:contain;
+  margin:auto;
+}
+.reader-mode-page .reader-body.is-zoomed .page-stage:not(.spread-stage){
+  display:block;
+  min-width:max-content;
+  min-height:max-content;
+}
+.reader-mode-page .reader-body.is-zoomed .page-stage:not(.spread-stage)>img{
+  max-height:none;
+  margin:0 auto;
+}
+@media(max-width:850px){
+  .reader-mode-page .reader-body.page-mode{
+    padding:0!important;
+    scroll-snap-type:none;
+  }
+  .reader-mode-page .page-stage:not(.spread-stage){
+    padding:0!important;
+  }
+  .reader-mode-page .page-stage:not(.spread-stage)>img{
+    width:auto;
+    max-width:100%;
+    max-height:calc(100dvh - 106px);
+    border-radius:0;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage{
+    width:100%;
+    max-width:100%;
+    overflow:visible;
+  }
+  .reader-mode-spread .flipbook-page{
+    contain:layout paint;
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
+  }
+  .reader-mode-spread .flipbook-page>img{
+    object-fit:contain;
+    max-width:100%;
+  }
+}
+@media(max-width:650px) and (orientation:portrait){
+  .reader-mode-spread .page-stage.flipbook-stage.two-page{
+    min-height:calc(100dvh - 106px);
+    align-content:center;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage.two-page>.flipbook-page{
+    min-width:0!important;
+    overflow:hidden;
+  }
+  .reader-mode-spread .page-stage.flipbook-stage.two-page>.flipbook-page>img{
+    width:100%!important;
+    max-width:100%!important;
+    height:auto!important;
+    max-height:calc(100dvh - 112px)!important;
+  }
+}
+@media(max-width:430px){
+  .reader-mode-page .page-stage:not(.spread-stage)>img{
+    max-height:calc(100dvh - 102px);
+  }
+  .reader-mode-spread .flipbook-page-number{display:none}
+  .reader-mode-spread .flipbook-corner-hint{opacity:.16}
+}
