@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.9 */
+/* Manga-HQ-hub reader styles — v0.3.10 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -945,4 +945,79 @@
 }
 @media(max-width:850px){
   .low-res-control select{min-height:44px;font-size:14px}
+}
+
+
+/* Manga-HQ-hub v0.3.10 — leitura móvel ampliada */
+@media(max-width:850px){
+  .reader.mobile-fullbleed.reader-mode-vertical .reader-body{
+    display:block!important;
+    align-items:flex-start!important;
+    justify-content:flex-start!important;
+    overflow-x:auto!important;
+    overflow-y:auto!important;
+    padding:0!important;
+    scroll-padding-top:0!important;
+    touch-action:pan-x pan-y pinch-zoom;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .vertical-pages,
+  .reader.mobile-fullbleed.reader-mode-vertical .webtoon-pages{
+    width:100dvw!important;
+    max-width:none!important;
+    min-width:100dvw!important;
+    padding:0!important;
+    margin:0!important;
+    align-self:flex-start!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot{
+    min-height:0!important;
+    margin:0 0 2px!important;
+    border:0!important;
+    border-radius:0!important;
+    align-self:flex-start!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot:first-child{
+    margin-top:0!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot.mobile-reading-slot{
+    width:calc(100dvw * var(--mobile-reading-scale,1))!important;
+    max-width:none!important;
+    overflow:hidden!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot.mobile-reading-slot>img,
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot.mobile-reading-slot>.pdf-page-canvas{
+    width:100%!important;
+    max-width:none!important;
+    height:auto!important;
+    object-fit:contain!important;
+  }
+
+  .reader.mobile-fullbleed.reader-mode-page .page-stage:not(.spread-stage)>img{
+    width:var(--reader-page-width,auto)!important;
+    max-width:var(--reader-page-max,100dvw)!important;
+    height:auto!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-page .pdf-page-canvas.mobile-reading-enlarged{
+    width:calc(100dvw * var(--mobile-reading-scale,1))!important;
+    max-width:none!important;
+    height:auto!important;
+  }
+  .reader.mobile-fullbleed .reader-body.mobile-reading-active{
+    overflow-x:auto!important;
+    overscroll-behavior-x:contain!important;
+  }
+
+  .mobile-reading-control{
+    border-color:rgba(59,130,246,.35);
+    background:rgba(37,99,235,.07);
+  }
+}
+
+/* Evita espaço reservado artificial antes da primeira página carregada */
+.reader-mode-vertical .page-slot[data-loaded="1"]{
+  min-height:0!important;
+}
+.reader-mode-vertical .vertical-pages,
+.reader-mode-vertical .webtoon-pages{
+  padding-top:0!important;
 }
