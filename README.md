@@ -87,9 +87,9 @@ Exemplo PDF:
   "id": "hq-29",
   "title": "HQ #29",
   "format": "pdf",
-  "file": "colecoes/hq/29/HQ-29.pdf",
-  "cover": "colecoes/hq/29/capa.webp"
+  "file": "https://raw.githubusercontent.com/USUARIO/REPOSITORIO/main/colecoes/hq/29/HQ-29.pdf",
+  "cover": "https://raw.githubusercontent.com/USUARIO/REPOSITORIO/main/colecoes/hq/29/capa.webp"
 }
 ```
 
-PDFs externos são abertos pelo PDF.js do próprio Manga-HQ-hub e também podem ser salvos para leitura offline quando o servidor permite CORS.
+PDFs externos são abertos pelo PDF.js do próprio Manga-HQ-hub e também podem ser salvos para leitura offline quando o servidor permite CORS. No Manga-HQ-acervo-1, use a URL `raw.githubusercontent.com` para o campo `file`, pois a pasta pesada de HQs não faz parte do pacote do GitHub Pages.
