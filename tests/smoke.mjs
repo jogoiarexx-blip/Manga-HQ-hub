@@ -11,6 +11,7 @@ const assert = (condition, message) => {
 
 const app = read('js/app.js');
 const css = read('css/app.css');
+const readerCss = read('css/reader.css');
 const index = read('index.html');
 const config = read('config.js');
 const sw = read('sw.js');
@@ -21,9 +22,11 @@ assert(pkg.version === VERSION, 'package.json version');
 assert(config.includes(`appVersion: '${VERSION}'`), 'config version');
 assert(index.includes(`app.js?v=${VERSION}`), 'versioned app.js');
 assert(index.includes(`app.css?v=${VERSION}`), 'versioned app.css');
+assert(index.includes(`reader.css?v=${VERSION}`), 'versioned reader.css');
 assert(sw.includes(`v${VERSION}`), 'service worker cache version');
 assert(sw.includes(`app.js?v=${VERSION}`), 'service worker precaches versioned JS');
 assert(sw.includes(`app.css?v=${VERSION}`), 'service worker precaches versioned CSS');
+assert(sw.includes(`reader.css?v=${VERSION}`), 'service worker precaches reader CSS');
 assert(!css.includes('\\\\n'), 'CSS must not contain literal \\n sequences');
 assert(!app.includes('LOCAL_RUNTIME_URLS'), 'no references to missing local vendor runtimes');
 assert(app.includes("import('./modules/offline-webp.js')"), 'WebP offline module wired');
