@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.3.10 -->
+<!-- Manga-HQ-hub deploy v0.3.11 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -11,12 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.3.10</title>
+  <title>Manga-HQ-hub v0.3.11</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.3.10" />
-  <link rel="stylesheet" href="./css/reader.css?v=0.3.10" />
+  <link rel="stylesheet" href="./css/app.css?v=0.3.11" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.3.11" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -187,6 +187,15 @@
         </select>
         <small id="mobileReadingStatus">Automático • aumenta scans pequenos e permite arrastar para os lados.</small>
       </label>
+      <label class="low-res-control pdf-quality-control">
+        <span>Qualidade PDF</span>
+        <select id="pdfQualitySelect">
+          <option value="eco">Econômico</option>
+          <option value="auto" selected>Automático</option>
+          <option value="sharp">Nítido</option>
+        </select>
+        <small id="pdfQualityStatus">Automático • página atual mais nítida; páginas próximas continuam leves.</small>
+      </label>
       <div class="reader-display-actions"><button id="nightProfileBtn" class="ghost">☾ Perfil noturno</button><button id="resetDisplayBtn" class="ghost">↺ Restaurar</button></div>
     </div>
     <aside id="thumbDrawer" class="thumb-drawer hidden" aria-label="Miniaturas das páginas">
@@ -274,7 +283,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.3.10"></script>
-  <script type="module" src="./js/app.js?v=0.3.10"></script>
+  <script src="./config.js?v=0.3.11"></script>
+  <script type="module" src="./js/app.js?v=0.3.11"></script>
 </body>
 </html>
