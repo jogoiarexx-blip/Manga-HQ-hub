@@ -688,3 +688,20 @@ a{color:inherit}
   }
   .alphabet-section strong{min-width:34px;height:34px;font-size:15px}
 }
+
+
+/* Manga-HQ-hub v0.3.7 — A-Z ativo */
+.alphabet-btn{
+  transition:transform .16s ease,background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease;
+}
+.alphabet-btn.active{
+  color:#fff;
+  border-color:transparent;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 8px 22px rgba(124,58,237,.28);
+  transform:translateY(-1px) scale(1.04);
+}
+.alphabet-btn.active small{color:rgba(255,255,255,.78)}
+@media(max-width:850px){
+  .alphabet-btn.active{transform:scale(1.05)}
+}
