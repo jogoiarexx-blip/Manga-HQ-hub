@@ -1,4 +1,4 @@
-const APP_VERSION = '0.2.8';
+const APP_VERSION = '0.2.9';
 const CACHE_PREFIX = 'manga-hq-hub-ghpages-';
 const LEGACY_CACHE_PREFIXES = ['manga-hq-reader-ghpages-'];
 const CACHE = `${CACHE_PREFIX}v${APP_VERSION}`;
