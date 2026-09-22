@@ -1,0 +1,10 @@
+{
+  "name": "manga-hq-hub",
+  "version": "0.2.8",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --check js/app.js && node --check js/modules/offline-webp.js && node tests/smoke.mjs",
+    "validate:acervo": "node tests/validate-acervo.mjs"
+  }
+}
