@@ -665,3 +665,11 @@
     -webkit-overflow-scrolling:touch;
   }
 }
+
+
+/* PDF close reliability */
+.reader-topbar{position:relative;z-index:180}
+.reader-close-btn{position:relative;z-index:181;pointer-events:auto;touch-action:manipulation}
+@media(max-width:850px){
+  .reader-close-btn{width:44px!important;height:44px!important;min-width:44px}
+}
