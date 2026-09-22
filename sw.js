@@ -1,8 +1,9 @@
-const APP_VERSION = '0.3.4';
+const APP_VERSION = '0.3.5';
 const CACHE_PREFIX = 'manga-hq-hub-ghpages-';
 const LEGACY_CACHE_PREFIXES = ['manga-hq-reader-ghpages-'];
 const CACHE = `${CACHE_PREFIX}v${APP_VERSION}`;
 const WEBP_OFFLINE_CACHE = 'manga-hq-hub-webp-offline-v1';
+const REMOTE_IMAGE_CACHE = 'manga-hq-hub-remote-images-v1';
 const BASE = new URL('./', self.location.href);
 
 const CORE = [
@@ -68,7 +69,7 @@ async function cacheMatch(request) {
   const offline = await offlineWebpMatch(request);
   if (offline) return offline;
   const cache = await caches.open(CACHE);
-  return cache.match(request);
+  return (await cache.match(request)) || (await cache.match(request, { ignoreSearch:true }));
 }
 
 async function networkFirst(request) {
@@ -105,7 +106,25 @@ async function acervoPage(request) {
   }
 }
 
+async function remoteImage(request) {
+  const cache = await caches.open(REMOTE_IMAGE_CACHE);
+  const cached = await cache.match(request);
+  const fresh = fetch(request).then(async response => {
+    if (response.ok || response.type === 'opaque') {
+      await cache.put(request, response.clone());
+      const keys = await cache.keys();
+      const maxEntries = 160;
+      if (keys.length > maxEntries) {
+        await Promise.all(keys.slice(0, keys.length - maxEntries).map(key => cache.delete(key)));
+      }
+    }
+    return response;
+  }).catch(() => null);
+  return cached || (await fresh) || Response.error();
+}
+
 const RUNTIME_CDN_ORIGINS = new Set(['https://esm.sh', 'https://cdn.jsdelivr.net']);
+const RAW_GITHUB_ORIGIN = 'https://raw.githubusercontent.com';
 
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
@@ -116,12 +135,25 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  if (url.origin === RAW_GITHUB_ORIGIN) {
+    if (/\.(?:avif|webp|png|jpe?g|gif)$/i.test(url.pathname)) {
+      event.respondWith(remoteImage(event.request));
+      return;
+    }
+    if (/\.json$/i.test(url.pathname)) {
+      event.respondWith(networkFirst(event.request));
+      return;
+    }
+    // PDFs ficam fora do Cache Storage automático para não duplicar arquivos grandes.
+    return;
+  }
+
   if (url.origin !== self.location.origin) return;
 
   const isNavigation = event.request.mode === 'navigate';
   const isFreshJson = /\/(?:catalogo|manifest|series)\.json$/i.test(url.pathname) || url.pathname.endsWith('/data/catalog.json');
   const isFreshAppAsset = /\/(?:config\.js|js\/app\.js|css\/app\.css|css\/reader\.css)$/i.test(url.pathname);
-  const isAcervoPage = url.pathname.includes('/Manga-HQ-acervo-1/colecoes/') && /\.(?:avif|webp|png|jpe?g|gif)$/i.test(url.pathname);
+  const isAcervoPage = /\/Manga-HQ-acervo-[^/]+\/.*\.(?:avif|webp|png|jpe?g|gif)$/i.test(url.pathname);
 
   if (isNavigation || isFreshJson || isFreshAppAsset) {
     event.respondWith(networkFirst(event.request));
