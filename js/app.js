@@ -260,6 +260,7 @@ async function deleteOfflineRecord(id) {
   }
   await offlineDbAction('readwrite', (store) => store.delete(id));
   state.offlineIds.delete(id); state.offlineMeta.delete(id); state.offlineProgress.delete(id);
+  if (!state.items.some(item => item.id === id && !item.offline)) state.items = state.items.filter(item => item.id !== id);
   await updateOfflineStorageInfo(); render();
 }
 async function updateOfflineStorageInfo() {
@@ -388,13 +389,18 @@ async function toggleOfflineItem(item) {
 async function clearOfflineLibrary() {
   for (const c of state.offlineControllers.values()) c.abort();
   state.offlineControllers.clear();
-  if (!state.offlineIds.size) { toast('A biblioteca offline já está vazia.'); return; }
-  if (!confirm(`Remover ${state.offlineIds.size} item(ns) salvos offline?`)) return;
+  const ids = new Set(state.offlineIds);
+  if (!ids.size) {
+    try { const mod = await loadOfflineWebpModule(); await mod.clearWebPageOfflineCache(); } catch {}
+    toast('A biblioteca offline já está vazia.'); return;
+  }
+  if (!confirm(`Remover ${ids.size} item(ns) salvos offline?`)) return;
   try {
     const mod = await loadOfflineWebpModule();
     await mod.clearWebPageOfflineCache();
   } catch {}
   await offlineDbAction('readwrite', (store) => store.clear());
+  state.items = state.items.filter(item => !(ids.has(item.id) && item.offline));
   await refreshOfflineIndex(); await updateOfflineStorageInfo(); render(); toast('Biblioteca offline limpa.');
 }
 function saveFav() { storageSet(LS.fav, JSON.stringify([...favorites])); }
