@@ -1043,3 +1043,50 @@ a{color:inherit}
   .brand-logo{width:92px!important}
   .reader-title-wrap small{display:none}
 }
+
+
+/* Manga-HQ-hub v0.2.6 — mobile reader performance */
+.flipbook-stage.single-wide{
+  justify-content:center;
+  gap:0!important;
+  background:transparent;
+  box-shadow:none;
+}
+.flipbook-stage.single-wide::before{display:none}
+.flipbook-stage.single-wide>.flipbook-page,
+.flipbook-stage.single-wide>.spread-page{
+  flex:0 1 min(96%,1100px)!important;
+  width:min(96%,1100px)!important;
+  max-width:min(96%,1100px)!important;
+  transform-origin:center center!important;
+}
+.flipbook-stage.single-wide .flipbook-page-number{right:8px;left:auto}
+.flipbook-stage.single-wide .flipbook-corner-hint{display:none}
+.reader-body img,.reader-body canvas{contain:paint}
+@media(max-width:850px){
+  .reader-body{contain:layout paint style}
+  .page-stage.flipbook-stage{will-change:auto}
+  .flipbook-page{will-change:auto}
+  .flipbook-page.is-live-flip{will-change:transform}
+  .page-stage img{image-rendering:auto}
+  .flipbook-stage.single-wide>.flipbook-page,
+  .flipbook-stage.single-wide>.spread-page{
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .flipbook-stage.single-wide img,
+  .flipbook-stage.single-wide .pdf-page-canvas{
+    max-width:100%!important;
+    width:100%!important;
+    height:auto!important;
+    max-height:calc(100dvh - 110px)!important;
+    object-fit:contain;
+  }
+}
+@media(max-width:430px){
+  .flipbook-stage.flip-next .flipbook-page,
+  .flipbook-stage.flip-prev .flipbook-page{
+    animation-duration:.34s!important;
+  }
+  .reader-loading .spinner{width:30px;height:30px}
+}
