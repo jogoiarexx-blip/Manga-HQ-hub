@@ -1,6 +1,18 @@
-# Manga-HQ-hub v0.2.8
+# Manga-HQ-hub v0.2.9
 
 Leitor de mangás e HQs para navegador e PWA, com acervo WebP conectado e suporte a PDF, CBR, CBZ, RAR e ZIP.
+
+## v0.2.9 — leitura mobile refinada
+
+- Duplo toque/duplo clique amplia a página para 180% no ponto tocado.
+- O segundo duplo toque volta para 100%.
+- Pinch zoom em imagens dá resposta visual durante o gesto.
+- Nova opção **Manter o mesmo zoom entre páginas**.
+- Ao manter o zoom, a nova página abre centralizada horizontalmente.
+- Páginas panorâmicas passam a ser reconhecidas dinamicamente também quando as dimensões são descobertas em PDF, CBR/CBZ, RAR/ZIP ou imagens sem dimensões no manifesto.
+- O Flipbook agora diferencia **capa**, **página normal solitária**, **duas páginas** e **panorâmica**.
+- A última página sem par não usa mais o tamanho visual reduzido reservado à capa.
+- Mantidas todas as otimizações de memória, miniaturas lazy, offline WebP e PWA da v0.2.8.
 
 ## Leitor
 
@@ -8,8 +20,8 @@ Leitor de mangás e HQs para navegador e PWA, com acervo WebP conectado e suport
 - Leitura LTR/RTL.
 - Zoom, ajuste de largura/altura, brilho, contraste e sépia.
 - Swipe, toque, teclado, pinch zoom e arraste do Flipbook.
-- Detecção de páginas panorâmicas no acervo WebP.
-- PDF com limite adaptativo de pixels para reduzir uso de RAM.
+- Detecção de páginas panorâmicas.
+- PDF com limite adaptativo de pixels.
 - Cancelamento de renderizações antigas ao navegar rapidamente.
 - Miniaturas carregadas sob demanda por proximidade da tela.
 
@@ -17,37 +29,32 @@ Leitor de mangás e HQs para navegador e PWA, com acervo WebP conectado e suport
 
 - Cache de páginas reduzido conforme memória e tamanho da tela.
 - Pré-carregamento adaptado à conexão e ao modo de economia de dados.
-- Página única otimizada sem reconstruir o leitor a cada zoom.
+- Página única sem reconstruir o leitor a cada zoom de imagem.
 - Flipbook com contenção de layout e animações mais leves.
-- Limite mais conservador para CBR/CBZ grandes em aparelhos móveis.
-- Download de arquivos grandes evita cópia integral extra quando o tamanho recebido é conhecido.
+- Limite conservador para CBR/CBZ grandes.
+- Download de arquivos grandes evita cópia integral extra quando possível.
 
 ## Offline e PWA
 
 - Progresso, favoritos, marcadores e preferências salvos localmente.
 - PDF/CBR/CBZ/RAR podem ser salvos offline quando a fonte permite download.
-- Edições WebP publicadas com `manifest.json` podem ser salvas completas offline, página por página.
-- O Service Worker usa catálogo e manifestos em modo network-first para detectar novas HQs sem exigir duas atualizações.
-- Motores PDF.js, JSZip e UnRAR são aquecidos e armazenados pelo cache do PWA após a primeira conexão.
-- O app não tenta mais carregar arquivos `vendor/` inexistentes.
+- Edições WebP com `manifest.json` podem ser salvas completas offline.
+- Catálogo e manifestos usam network-first para detectar novas HQs imediatamente.
+- PDF.js, JSZip e UnRAR são armazenados pelo cache do PWA após a primeira conexão.
 
 ## Estrutura
 
 - `js/app.js` — aplicação principal.
-- `js/modules/offline-webp.js` — cache offline das edições WebP.
+- `js/modules/offline-webp.js` — cache offline de edições WebP.
 - `css/app.css` — interface geral.
-- `css/reader.css` — estilos específicos do leitor.
-- `sw.js` — PWA, cache e estratégias de rede.
+- `css/reader.css` — estilos do leitor.
+- `sw.js` — PWA e estratégias de cache.
 - `tests/` — smoke test e validação do acervo.
-- `.github/workflows/validate.yml` — validação automática a cada alteração na `main`.
+- `.github/workflows/validate.yml` — validação automática.
 
 ## Acervo conectado
 
-O Hub usa o catálogo publicado em:
-
 https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/catalogo.json
-
-Itens externos recebem uma data local de primeira detecção, permitindo que o filtro **Novos** funcione mesmo quando o catálogo antigo não possui `addedAt`.
 
 ## Validação
 
@@ -55,5 +62,3 @@ Itens externos recebem uma data local de primeira detecção, permitindo que o f
 npm test
 npm run validate:acervo
 ```
-
-A validação principal verifica sintaxe, versão, PWA, CSP, arquivos de estilo e integração do módulo offline. A validação remota confere IDs duplicados, campos obrigatórios e contagem de páginas dos manifestos.
