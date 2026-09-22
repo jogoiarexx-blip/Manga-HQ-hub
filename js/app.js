@@ -86,7 +86,7 @@ const state = {
 const favorites = new Set(readJson(LS.fav, []));
 const progress = readJson(LS.progress, {});
 const bookmarks = readJson(LS.bookmarks, {});
-const displayPrefs = { brightness:100, contrast:100, sepia:0, ...readJson(LS.display, {}) };
+const displayPrefs = { brightness:100, contrast:100, sepia:0, lowRes:'auto', ...readJson(LS.display, {}) };
 const itemReaderPrefs = readJson(LS.itemPrefs, {});
 const firstSeen = readJson(LS.firstSeen, {});
 const prefs = { defaultMode: 'spread', direction: 'ltr', performance: 'auto', autoScrollSpeed: 46, keepZoom: false, ...readJson(LS.prefs, {}) };
@@ -135,20 +135,86 @@ function togglePageBookmark() {
   if (!bookmarks[key].length) delete bookmarks[key];
   saveBookmarks(); updateBookmarkButton(); updatePageControls();
 }
+function lowResMode() {
+  return ['off','auto','strong'].includes(String(displayPrefs.lowRes || 'auto')) ? String(displayPrefs.lowRes || 'auto') : 'auto';
+}
+function pageLooksLowResolution(width, height) {
+  const w = Number(width || 0), h = Number(height || 0);
+  if (!w || !h) return false;
+  const shortSide = Math.min(w, h), longSide = Math.max(w, h);
+  return shortSide < 1000 || longSide < 1500 || (w * h) < 1600000;
+}
+function shouldEnhanceLowResolution(index, width = 0, height = 0) {
+  const mode = lowResMode();
+  if (mode === 'off') return false;
+  if (mode === 'strong') return true;
+  if (extType(state.current || {}) === 'pdf') return false;
+  const dims = width && height ? { width:Number(width), height:Number(height) } : pageDimensions(index);
+  return pageLooksLowResolution(dims.width, dims.height);
+}
+function applyLowResFilterToElement(el, index, width = 0, height = 0) {
+  if (!el) return false;
+  const mode = lowResMode();
+  const active = shouldEnhanceLowResolution(index, width, height);
+  el.classList.toggle('low-res-enhanced', active);
+  el.classList.toggle('low-res-strong', active && mode === 'strong');
+  if (active) {
+    el.dataset.lowRes = mode;
+    if (width && height) {
+      el.dataset.sourceWidth = String(Math.round(width));
+      el.dataset.sourceHeight = String(Math.round(height));
+    }
+  } else {
+    delete el.dataset.lowRes;
+  }
+  return active;
+}
+function refreshLowResFilters() {
+  const mode = lowResMode();
+  const isPdf = extType(state.current || {}) === 'pdf';
+  let activeCount = 0;
+
+  $('#readerBody')?.querySelectorAll('img').forEach(img => {
+    const index = Number(img.closest('[data-i]')?.dataset.i ?? img.closest('[data-pdf-i]')?.dataset.pdfI ?? state.page);
+    if (applyLowResFilterToElement(img, index, img.naturalWidth, img.naturalHeight)) activeCount++;
+  });
+  $('#readerBody')?.querySelectorAll('.pdf-page-canvas').forEach(canvas => {
+    const index = Number(canvas.closest('[data-i]')?.dataset.i ?? canvas.closest('[data-pdf-i]')?.dataset.pdfI ?? state.page);
+    if (applyLowResFilterToElement(canvas, index, canvas.width, canvas.height)) activeCount++;
+  });
+
+  const status = $('#lowResStatus');
+  if (status) {
+    if (mode === 'off') status.textContent = 'Filtro desligado. A página é exibida sem reforço extra.';
+    else if (mode === 'strong') status.textContent = `Forte ativo${isPdf ? ' • útil para PDFs escaneados' : ''}. Usa apenas filtro visual leve.`;
+    else if (activeCount) status.textContent = 'Auto ativo • página de baixa resolução detectada e reforçada.';
+    else status.textContent = isPdf ? 'Auto não altera PDF; use Forte se este PDF for um scan borrado.' : 'Auto ativo • a página atual não precisa de reforço.';
+  }
+}
+
 function applyDisplayPrefs() {
   const reader = $('#reader'); if (!reader) return;
   reader.style.setProperty('--reader-brightness', `${Number(displayPrefs.brightness || 100)}%`);
   reader.style.setProperty('--reader-contrast', `${Number(displayPrefs.contrast || 100)}%`);
   reader.style.setProperty('--reader-sepia', `${Number(displayPrefs.sepia || 0)}%`);
+  reader.classList.toggle('low-res-mode-strong', lowResMode() === 'strong');
   if ($('#brightnessRange')) $('#brightnessRange').value = String(displayPrefs.brightness || 100);
   if ($('#contrastRange')) $('#contrastRange').value = String(displayPrefs.contrast || 100);
   if ($('#sepiaRange')) $('#sepiaRange').value = String(displayPrefs.sepia || 0);
+  if ($('#lowResModeSelect')) $('#lowResModeSelect').value = lowResMode();
   if ($('#brightnessValue')) $('#brightnessValue').textContent = `${displayPrefs.brightness || 100}%`;
   if ($('#contrastValue')) $('#contrastValue').textContent = `${displayPrefs.contrast || 100}%`;
   if ($('#sepiaValue')) $('#sepiaValue').textContent = `${displayPrefs.sepia || 0}%`;
+  refreshLowResFilters();
 }
 function setDisplayPref(name, value) {
   displayPrefs[name] = Number(value); saveDisplayPrefs(); applyDisplayPrefs();
+}
+function setLowResMode(value) {
+  displayPrefs.lowRes = ['off','auto','strong'].includes(String(value)) ? String(value) : 'auto';
+  saveDisplayPrefs();
+  applyDisplayPrefs();
+  toast(displayPrefs.lowRes === 'off' ? 'Filtro de baixa resolução desligado.' : displayPrefs.lowRes === 'strong' ? 'Filtro forte ativado.' : 'Filtro automático de baixa resolução ativado.');
 }
 function setImmersive(value = !state.immersive) {
   state.immersive = Boolean(value);
@@ -1434,6 +1500,7 @@ async function openItem(item, forceLarge = false) {
   state.readerViewportH = Math.round($('#readerBody')?.clientHeight || innerHeight);
   $('#readerTitle').textContent = item.name; $('#readerMeta').textContent = `${bytes(item.size)}${item.offline ? ' • OFFLINE' : ''}`;
   updateOfflineCurrentButton();
+  applyDisplayPrefs();
   setReaderButtons(type);
   updateReaderPrefsUI();
   if (type === 'pdf') return openPdf(item, token);
@@ -1945,6 +2012,8 @@ async function renderPdfInto(container, index, token, vertical = false) {
   }
   if (token !== state.renderToken || !container?.isConnected) return;
   container.innerHTML = ''; container.appendChild(canvas);
+  applyLowResFilterToElement(canvas, index, canvas.width, canvas.height);
+  refreshLowResFilters();
   if (vertical) { container.style.aspectRatio = `${viewport.width}/${viewport.height}`; if (index === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); }
 }
 
@@ -2099,6 +2168,7 @@ function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
       if (page && (!Number(page.width) || !Number(page.height)) && img.naturalWidth && img.naturalHeight) {
         const before = effectiveMode() === 'spread' ? spreadIndexes().join(',') : '';
         page.width = img.naturalWidth; page.height = img.naturalHeight;
+        applyLowResFilterToElement(img, index, img.naturalWidth, img.naturalHeight);
         const after = effectiveMode() === 'spread' ? spreadIndexes().join(',') : '';
         if (before !== after && expectedToken === state.renderToken && !state.panoramaRerenderPending) {
           state.panoramaRerenderPending = true;
@@ -2108,6 +2178,8 @@ function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
           });
         }
       }
+      applyLowResFilterToElement(img, index, img.naturalWidth, img.naturalHeight);
+      refreshLowResFilters();
     }, { once:true });
     img.addEventListener('error', () => {
       const index = indexes[n] ?? state.page;
@@ -2185,7 +2257,7 @@ async function renderReaderPages() {
       if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
     }
   }
-  updateProgress(); updatePageControls();
+  updateProgress(); updatePageControls(); refreshLowResFilters();
 }
 
 function setupVerticalObserver() {
@@ -2216,7 +2288,7 @@ async function loadVerticalSlot(slot) {
     const url = await getPageUrl(i);
     if (!slot.isConnected) return;
     const img = new Image(); img.alt = `Página ${i + 1}`; img.loading = 'lazy'; img.decoding = 'async'; img.fetchPriority = 'low'; img.src = url;
-    img.onload = () => { if (img.naturalWidth && img.naturalHeight) slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; if (i === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); };
+    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); refreshLowResFilters(); if (i === state.page && state.verticalRestore) requestAnimationFrame(() => restoreVerticalPosition(true)); };
     img.onerror = () => {
       const entry = state.archive?.entries?.[i];
       if (state.archive?.type === 'drive-pages' && entry?.id) {
@@ -2704,8 +2776,9 @@ $('#closeDisplayBtn')?.addEventListener('click', () => { $('#readerDisplayPanel'
 $('#brightnessRange')?.addEventListener('input', e => setDisplayPref('brightness', e.target.value));
 $('#contrastRange')?.addEventListener('input', e => setDisplayPref('contrast', e.target.value));
 $('#sepiaRange')?.addEventListener('input', e => setDisplayPref('sepia', e.target.value));
+$('#lowResModeSelect')?.addEventListener('change', e => setLowResMode(e.target.value));
 $('#nightProfileBtn')?.addEventListener('click', () => { displayPrefs.brightness=78; displayPrefs.contrast=92; displayPrefs.sepia=12; saveDisplayPrefs(); applyDisplayPrefs(); });
-$('#resetDisplayBtn')?.addEventListener('click', () => { displayPrefs.brightness=100; displayPrefs.contrast=100; displayPrefs.sepia=0; saveDisplayPrefs(); applyDisplayPrefs(); });
+$('#resetDisplayBtn')?.addEventListener('click', () => { displayPrefs.brightness=100; displayPrefs.contrast=100; displayPrefs.sepia=0; displayPrefs.lowRes='auto'; saveDisplayPrefs(); applyDisplayPrefs(); });
 $('#immersiveBtn')?.addEventListener('click', () => setImmersive());
 $('#fitBtn').addEventListener('click', async () => {
   const fits=['contain','width','height']; state.fit=fits[(fits.indexOf(state.fit)+1)%fits.length]; persistCurrentReaderPrefs(); updateReaderPrefsUI(); await renderReaderPages();
@@ -3017,7 +3090,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.7', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.9', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
