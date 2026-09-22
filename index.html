@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.2.8 -->
+<!-- Manga-HQ-hub deploy v0.2.9 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -11,12 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.2.8</title>
+  <title>Manga-HQ-hub v0.2.9</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.2.8" />
-  <link rel="stylesheet" href="./css/reader.css?v=0.2.8" />
+  <link rel="stylesheet" href="./css/app.css?v=0.2.9" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.2.9" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -196,6 +196,7 @@
           <label class="field"><span>Direção padrão</span><select id="directionSelect"><option value="ltr">Esquerda → direita</option><option value="rtl">Direita → esquerda (mangá)</option></select></label>
           <label class="field"><span>Desempenho</span><select id="performanceSelect"><option value="auto">Automático</option><option value="eco">Econômico / celular fraco</option><option value="quality">Qualidade máxima</option></select><small id="performanceHint" class="field-hint"></small></label>
           <label class="field"><span>Velocidade da rolagem automática</span><select id="autoScrollSpeedSelect"><option value="28">Lenta</option><option value="46">Normal</option><option value="70">Rápida</option><option value="100">Muito rápida</option></select></label>
+          <label class="field"><span>Zoom entre páginas</span><select id="keepZoomSelect"><option value="no">Resetar ao trocar página</option><option value="yes">Manter o mesmo zoom</option></select><small class="field-hint">Útil para ler letras pequenas no celular.</small></label>
         </div>
         <div class="drive-health">
           <div><strong>Conexão com Google Drive</strong><small id="driveHealthText">Aguardando teste…</small></div>
@@ -249,7 +250,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.2.8"></script>
-  <script type="module" src="./js/app.js?v=0.2.8"></script>
+  <script src="./config.js?v=0.2.9"></script>
+  <script type="module" src="./js/app.js?v=0.2.9"></script>
 </body>
 </html>
