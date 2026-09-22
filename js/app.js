@@ -2095,7 +2095,7 @@ async function closeReader(fromHistory = false) {
   closeReaderControls();
   $('#readerDisplayPanel')?.classList.add('hidden');
   setImmersive(false);
-  if (isVerticalMode()) { updateVerticalPosition(); scheduleVerticalProgressSave(); }
+  if (isVerticalMode()) { updateVerticalPosition(); updateProgress(); }
   state.openToken++;
   await cleanupReaderData();
   $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true');
