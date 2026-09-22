@@ -80,7 +80,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map()
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: ''
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1132,9 +1132,43 @@ function jumpToCatalogLetter(letter) {
   render();
   requestAnimationFrame(() => {
     const section = document.querySelector(`[data-alpha-section="${CSS.escape(targetLetter)}"]`);
+    setActiveAlphabetLetter(targetLetter, true);
     section?.scrollIntoView({ behavior:'smooth', block:'start' });
   });
 }
+function setActiveAlphabetLetter(letter, reveal = false) {
+  const host = $('#alphabetIndex');
+  if (!host) return;
+  const value = String(letter || '').toUpperCase();
+  if (state.activeAlphabetLetter === value && !reveal) return;
+  state.activeAlphabetLetter = value;
+  host.querySelectorAll('[data-alpha]').forEach(btn => btn.classList.toggle('active', btn.dataset.alpha === value));
+  if (reveal) {
+    const active = host.querySelector(`[data-alpha="${CSS.escape(value)}"]`);
+    active?.scrollIntoView?.({ behavior:'smooth', block:'nearest', inline:'center' });
+  }
+}
+let alphabetScrollRaf = 0;
+function updateAlphabetFromScroll() {
+  alphabetScrollRaf = 0;
+  const host = $('#alphabetIndex');
+  if (!host || host.classList.contains('hidden') || state.sort !== 'name') return;
+  const sections = [...document.querySelectorAll('[data-alpha-section]')];
+  if (!sections.length) return;
+  const anchor = performanceProfile().mobile ? 158 : 170;
+  let current = sections[0];
+  for (const section of sections) {
+    if (section.getBoundingClientRect().top <= anchor) current = section;
+    else break;
+  }
+  setActiveAlphabetLetter(current.dataset.alphaSection || '', true);
+}
+function scheduleAlphabetScrollSync() {
+  if (alphabetScrollRaf) return;
+  alphabetScrollRaf = requestAnimationFrame(updateAlphabetFromScroll);
+}
+window.addEventListener('scroll', scheduleAlphabetScrollSync, { passive:true });
+
 
 function itemCard(item) {
   const type = extType(item), pct = percentFor(item), thumb = thumbUrl(item);
@@ -1246,6 +1280,7 @@ function render() {
     more.textContent = left > 0 ? `Carregar mais (${left} restantes)` : 'Carregar mais';
   }
   hydratePdfCovers(visible);
+  requestAnimationFrame(updateAlphabetFromScroll);
 }
 
 function setReaderButtons(type) {
@@ -1392,6 +1427,8 @@ async function openItem(item, forceLarge = false) {
   $('#reader')?.classList.toggle('trim-margins', state.trimMargins);
   $('#reader').classList.remove('hidden'); $('#reader').setAttribute('aria-hidden', 'false');
   $('#reader')?.classList.toggle('mobile-fullbleed', performanceProfile().mobile);
+  $('#reader')?.classList.remove('reader-chrome-hidden');
+  scheduleReaderChromeHide(2600);
   document.body.style.overflow = 'hidden';
   state.readerViewportW = Math.round($('#readerBody')?.clientWidth || innerWidth);
   state.readerViewportH = Math.round($('#readerBody')?.clientHeight || innerHeight);
@@ -2322,7 +2359,7 @@ async function setPage(n) {
     resetPrefetchQueue();
     await renderReaderPages();
     resetPagedScrollPosition();
-    if (performanceProfile().mobile) { clearTimeout(readerControlsTimer); readerControlsTimer = setTimeout(closeReaderControls, 2200); }
+    if (performanceProfile().mobile) { closeReaderControls(false); scheduleReaderChromeHide(1400); }
     if (requestId === state.pageSetSeq) state.flipDirection = '';
   } finally {
     state.pageTransitioning = false;
@@ -2358,7 +2395,8 @@ async function closeReader(fromHistory = false) {
   if (isVerticalMode()) { updateVerticalPosition(); updateProgress(); }
   state.openToken++;
   await cleanupReaderData();
-  $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true'); $('#reader')?.classList.remove('mobile-fullbleed');
+  clearReaderChromeTimer(); clearTimeout(readerControlsTimer);
+  $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true'); $('#reader')?.classList.remove('mobile-fullbleed','reader-chrome-hidden');
   document.body.style.overflow = ''; state.current = null; state.verticalRestore = null; $('#readerBody').innerHTML = ''; render();
 
   if (shouldGoBack) {
@@ -2562,23 +2600,62 @@ $('#mobileFilterBtn')?.addEventListener('click', () => {
 $('#localBtn').addEventListener('click', () => $('#localFileInput').click());
 $('#localFileInput').addEventListener('change', async e => { const file = e.target.files?.[0]; e.target.value = ''; await openLocalSelected(file); });
 
-function closeReaderControls() {
+let readerControlsTimer = 0;
+let readerChromeTimer = 0;
+function clearReaderChromeTimer() {
+  clearTimeout(readerChromeTimer);
+  readerChromeTimer = 0;
+}
+function hideReaderChrome() {
+  if (!performanceProfile().mobile) return;
+  const reader = $('#reader');
+  if (!reader || reader.classList.contains('hidden') || reader.classList.contains('controls-open') || !$('#readerDisplayPanel')?.classList.contains('hidden') || !$('#thumbDrawer')?.classList.contains('hidden')) return;
+  reader.classList.add('reader-chrome-hidden');
+}
+function scheduleReaderChromeHide(delay = 2400) {
+  clearReaderChromeTimer();
+  if (!performanceProfile().mobile) return;
+  readerChromeTimer = setTimeout(hideReaderChrome, delay);
+}
+function showReaderChrome(autoHide = true) {
+  const reader = $('#reader'); if (!reader) return;
+  reader.classList.remove('reader-chrome-hidden');
+  clearReaderChromeTimer();
+  if (autoHide) scheduleReaderChromeHide();
+}
+function toggleReaderChrome() {
+  if (!performanceProfile().mobile) return;
+  const reader = $('#reader'); if (!reader) return;
+  if (reader.classList.contains('reader-chrome-hidden')) showReaderChrome(true);
+  else {
+    closeReaderControls(false);
+    reader.classList.add('reader-chrome-hidden');
+    clearReaderChromeTimer();
+  }
+}
+function closeReaderControls(scheduleHide = true) {
   $('#reader').classList.remove('controls-open');
   $('#readerMenuBtn')?.setAttribute('aria-expanded','false');
-}
-let readerControlsTimer = 0;
-function keepReaderControlsAlive() {
-  if (!matchMedia('(max-width:850px)').matches || !$('#reader').classList.contains('controls-open')) return;
   clearTimeout(readerControlsTimer);
-  readerControlsTimer = setTimeout(closeReaderControls, 6000);
+  if (scheduleHide) scheduleReaderChromeHide(1600);
+}
+function keepReaderControlsAlive() {
+  if (!performanceProfile().mobile || !$('#reader').classList.contains('controls-open')) return;
+  showReaderChrome(false);
+  clearTimeout(readerControlsTimer);
+  readerControlsTimer = setTimeout(() => closeReaderControls(true), 6000);
 }
 function toggleReaderControls() {
-  const open = $('#reader').classList.toggle('controls-open');
+  const reader = $('#reader');
+  if (!reader) return;
+  showReaderChrome(false);
+  const open = reader.classList.toggle('controls-open');
   $('#readerMenuBtn')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   clearTimeout(readerControlsTimer);
-  if (open && matchMedia('(max-width:850px)').matches) readerControlsTimer = setTimeout(closeReaderControls, 6000);
+  if (open && performanceProfile().mobile) readerControlsTimer = setTimeout(() => closeReaderControls(true), 6000);
+  else if (!open) scheduleReaderChromeHide(1600);
 }
-$('#readerMenuBtn')?.addEventListener('click', toggleReaderControls);
+$('#readerMenuBtn')?.addEventListener('click', e => { e.stopPropagation(); toggleReaderControls(); });
 $('.reader-controls')?.addEventListener('click', keepReaderControlsAlive);
 
 $('#closeReader').addEventListener('click', closeReader);
@@ -2617,13 +2694,13 @@ $('#modeBtn').addEventListener('click', async () => {
   await renderReaderPages();
   resetPagedScrollPosition();
 });
-$('#thumbsBtn')?.addEventListener('click', openThumbDrawer);
-$('#closeThumbsBtn')?.addEventListener('click', closeThumbDrawer);
+$('#thumbsBtn')?.addEventListener('click', () => { showReaderChrome(false); openThumbDrawer(); });
+$('#closeThumbsBtn')?.addEventListener('click', () => { closeThumbDrawer(); scheduleReaderChromeHide(1400); });
 $('#thumbGrid')?.addEventListener('click', e => { const b=e.target.closest('[data-thumb-page]'); if (!b) return; closeThumbDrawer(); setPage(Number(b.dataset.thumbPage)); });
 $('#bookmarkBtn')?.addEventListener('click', togglePageBookmark);
 $('#bookmarkJumpBtn')?.addEventListener('click', jumpToNextBookmark);
-$('#displayBtn')?.addEventListener('click', () => { applyDisplayPrefs(); $('#readerDisplayPanel')?.classList.toggle('hidden'); });
-$('#closeDisplayBtn')?.addEventListener('click', () => $('#readerDisplayPanel')?.classList.add('hidden'));
+$('#displayBtn')?.addEventListener('click', () => { showReaderChrome(false); applyDisplayPrefs(); $('#readerDisplayPanel')?.classList.toggle('hidden'); });
+$('#closeDisplayBtn')?.addEventListener('click', () => { $('#readerDisplayPanel')?.classList.add('hidden'); scheduleReaderChromeHide(1400); });
 $('#brightnessRange')?.addEventListener('input', e => setDisplayPref('brightness', e.target.value));
 $('#contrastRange')?.addEventListener('input', e => setDisplayPref('contrast', e.target.value));
 $('#sepiaRange')?.addEventListener('input', e => setDisplayPref('sepia', e.target.value));
@@ -2697,7 +2774,7 @@ async function setZoom(value) {
 $('#zoomOutBtn').addEventListener('click', () => setZoom(state.zoom - .2));
 $('#zoomInBtn').addEventListener('click', () => setZoom(state.zoom + .2));
 $('#zoomLabel').addEventListener('click', () => setZoom(1));
-$('#fullscreenBtn').addEventListener('click', () => { closeReaderControls(); document.fullscreenElement ? document.exitFullscreen() : $('#reader').requestFullscreen?.(); });
+$('#fullscreenBtn').addEventListener('click', () => { closeReaderControls(false); showReaderChrome(true); document.fullscreenElement ? document.exitFullscreen() : $('#reader').requestFullscreen?.(); });
 function stopAutoScroll() {
   if (state.autoScrollId) cancelAnimationFrame(state.autoScrollId);
   state.autoScrollId = 0; state.autoScrollLast = 0; updateReaderPrefsUI();
@@ -2846,15 +2923,28 @@ $('#readerBody').addEventListener('pointerup', e => {
 $('#readerBody').addEventListener('pointercancel', () => { state.flipDrag = null; clearFlipDragPreview(true); });
 
 $('#readerBody').addEventListener('click', e => {
-  if (!isPagedMode() || !state.pages.length || e.target.closest('button,a') || (Date.now() - Number(state.lastSwipeAt || 0) < 450) || (Date.now() - Number(state.lastFlipDragAt || 0) < 450)) return;
+  if (!state.pages.length || e.target.closest('button,a,input,select') || (Date.now() - Number(state.lastSwipeAt || 0) < 450) || (Date.now() - Number(state.lastFlipDragAt || 0) < 450)) return;
   const rect = $('#readerBody').getBoundingClientRect();
   const ratio = (e.clientX - rect.left) / Math.max(1, rect.width);
-  if (ratio > .30 && ratio < .70) {
-    if (matchMedia('(max-width:850px)').matches) toggleReaderControls();
+  const mobile = performanceProfile().mobile;
+
+  if (isVerticalMode()) {
+    if (mobile && ratio > .22 && ratio < .78) toggleReaderChrome();
     return;
   }
-  const leftZone = ratio <= .30;
+  if (!isPagedMode()) return;
+
+  if (ratio > .35 && ratio < .65) {
+    if (mobile) toggleReaderChrome();
+    return;
+  }
+  if (state.zoom > 1.01) {
+    if (mobile) showReaderChrome(true);
+    return;
+  }
+  const leftZone = ratio <= .35;
   const next = state.direction === 'rtl' ? leftZone : !leftZone;
+  if (mobile) scheduleReaderChromeHide(900);
   setPage(next ? nextPageIndex() : prevPageIndex());
 });
 $('#readerBody').addEventListener('dblclick', e => { if (isPagedMode() && e.target.closest('img,canvas')) { e.preventDefault(); zoomAtPoint(state.zoom <= 1.01 ? 1.8 : 1, e.clientX, e.clientY); } });
@@ -2927,7 +3017,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.6', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.7', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
