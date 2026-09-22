@@ -1,4 +1,4 @@
-# Manga-HQ-hub v0.3.5
+# Manga-HQ-hub v0.3.8
 
 Leitor/PWA de mangás e HQs com catálogo A–Z, múltiplos acervos e leitura otimizada para celular.
 
