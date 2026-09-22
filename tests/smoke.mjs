@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.11';
+const VERSION = '0.3.12';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -78,6 +78,12 @@ assert(app.includes('function schedulePdfNeighborWarmup'), 'PDF neighbor warmup 
 assert(app.includes('pdfVerticalTasks'), 'vertical PDF render task tracking exists');
 assert(app.includes("pdfQuality:'auto'"), 'automatic PDF quality default exists');
 assert(readerCss.includes('.pdf-pinch-preview'), 'PDF pinch preview CSS exists');
+assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
+assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
+assert(app.includes("for (const slot of $('.page-slot'))"), 'vertical slot iteration is correct');
+assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
+assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
+assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
