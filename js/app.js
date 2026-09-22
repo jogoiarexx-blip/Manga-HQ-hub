@@ -261,7 +261,7 @@ function refreshMobileReadingScale() {
   root.style.overscrollBehaviorX = performanceProfile().mobile && mode !== 'off' ? 'contain' : '';
 
   if (isVerticalMode()) {
-    $('.page-slot', root).forEach(slot => {
+    $$('.page-slot', root).forEach(slot => {
       const index = Number(slot.dataset.i);
       const img = slot.querySelector('img');
       const canvas = slot.querySelector('.pdf-page-canvas');
