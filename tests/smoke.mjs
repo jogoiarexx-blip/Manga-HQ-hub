@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.4';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
