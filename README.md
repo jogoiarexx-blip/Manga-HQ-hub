@@ -1,38 +1,48 @@
-# Manga-HQ-hub v0.3.8
+# Manga-HQ-hub v0.3.9
 
-Leitor/PWA de mangás e HQs com catálogo A–Z, múltiplos acervos e leitura otimizada para celular.
+Leitor/PWA de mangás e HQs com catálogo A–Z, Acervo 1, Acervo 2 e Acervo Marvel.
 
-## v0.3.7 — navegação A–Z inteligente e leitor sem barras
+## v0.3.9 — leitura de mangás com baixa resolução
 
-### Catálogo
+Foi adicionado um filtro de legibilidade leve para scans e imagens antigas sem transformar o leitor em um processador pesado.
 
-- A barra **# A–Z** agora acompanha a posição da rolagem.
-- A letra da seção atual fica destacada automaticamente.
-- O próprio índice horizontal acompanha a letra ativa.
-- Tocar numa letra continua carregando automaticamente o trecho necessário do catálogo.
-- O catálogo mantém carregamento progressivo automático sem pesar o celular.
-- Ordenação alfabética permanece padronizada em português do Brasil com números naturais.
+### Modos do filtro
 
-### Leitor no celular
+- **Desligado:** mostra a página original.
+- **Automático:** detecta páginas raster pequenas e aplica reforço leve somente nelas.
+- **Forte / scan borrado:** força o reforço visual, inclusive em PDFs escaneados.
 
-- Toque no **centro da página** esconde ou mostra os controles.
-- Topo e rodapé desaparecem completamente sem diminuir a área do PDF/WebP.
-- Os controles reaparecem ao tocar novamente no centro.
-- Controles somem automaticamente após alguns segundos.
-- Ao avançar/voltar página, o chrome some mais rápido.
-- As zonas laterais para avançar/voltar foram ampliadas para aproximadamente **35% de cada lado**.
-- Quando há zoom acima de 100%, toque lateral não troca página acidentalmente.
-- Vertical/Webtoon também permitem mostrar ou esconder o chrome com toque central.
-- Abrir Miniaturas, Visual ou Menu mantém os controles visíveis até a interação terminar.
-- Tela cheia do navegador continua funcionando junto com o full-bleed.
+### Como o Automático detecta baixa resolução
 
-### PDF e WebP
+A página é tratada como baixa resolução quando as dimensões indicam um scan pequeno, por exemplo aproximadamente 800×1200, 1000×1500 ou abaixo de cerca de 1,6 megapixel.
 
-- Continuam usando **100dvw × 100dvh** no celular.
-- Página única usa o máximo da tela sem corte.
-- Flipbook preserva duas páginas.
-- Panorâmicas usam toda a largura.
-- PDF mantém limite adaptativo de pixels para evitar travamentos.
+PDFs não são alterados automaticamente porque o PDF.js informa o tamanho da página, não a resolução real da imagem escaneada dentro dela. Para um PDF antigo/borrado, use **Forte**.
+
+### Desempenho
+
+O filtro não usa IA, upscale, WebGL ou convolução em canvas.
+
+Ele trabalha somente nas páginas visíveis usando:
+- contraste leve;
+- pequeno ajuste de brilho;
+- suavização normal do navegador;
+- saturação quase neutra.
+
+Isso evita duplicar imagens ou criar canvases extras e mantém o consumo de RAM próximo ao leitor normal.
+
+### Leitor
+
+- PDF e WebP continuam usando tela cheia no celular.
+- Página única, Flipbook, Vertical e Webtoon permanecem disponíveis.
+- O filtro funciona em página única, Flipbook e Vertical/Webtoon.
+- As preferências visuais continuam salvas localmente.
+- **Restaurar** volta o filtro para Automático.
+
+### Acervos
+
+- Manga HQ Acervo 1
+- Manga HQ Acervo 2
+- Manga HQ Acervo Marvel
 
 ## Validação
 
