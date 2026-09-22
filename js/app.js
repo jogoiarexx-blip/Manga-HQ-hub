@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.2.7',
+  appVersion: '0.2.8',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -24,19 +24,24 @@ const LS = {
   syncMeta: 'mhqr:syncMeta',
   bookmarks: 'mhqr:bookmarks',
   display: 'mhqr:displayPrefs',
-  itemPrefs: 'mhqr:itemReaderPrefs'
+  itemPrefs: 'mhqr:itemReaderPrefs',
+  firstSeen: 'mhqr:firstSeen'
 };
 
 
 
-const LOCAL_RUNTIME_URLS = { pdf:'./vendor/pdfjs/pdf.mjs', pdfWorker:'./vendor/pdfjs/pdf.worker.mjs', zip:'./vendor/jszip/jszip.mjs', unrar:'./vendor/unrar/unrar.mjs', unrarWasm:'./vendor/unrar/unrar.wasm' };
-const RUNTIME_URLS = [
-  'https://esm.sh/pdfjs-dist@6.3.289/build/pdf.mjs',
-  'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs',
-  'https://esm.sh/jszip@3.10.1',
-  'https://esm.sh/node-unrar-js@2.0.2?bundle',
-  'https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.2/esm/js/unrar.wasm'
-];
+const RUNTIME_URLS = {
+  pdf: 'https://esm.sh/pdfjs-dist@6.3.289/build/pdf.mjs',
+  pdfWorker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs',
+  zip: 'https://esm.sh/jszip@3.10.1',
+  unrar: 'https://esm.sh/node-unrar-js@2.0.2?bundle',
+  unrarWasm: 'https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.2/esm/js/unrar.wasm'
+};
+let offlineWebpModulePromise = null;
+function loadOfflineWebpModule() {
+  if (!offlineWebpModulePromise) offlineWebpModulePromise = import('./modules/offline-webp.js');
+  return offlineWebpModulePromise;
+}
 function formatDateTime(ts) {
   if (!ts) return '';
   try { return new Intl.DateTimeFormat('pt-BR', { dateStyle:'short', timeStyle:'short' }).format(new Date(ts)); }
@@ -53,11 +58,12 @@ async function warmReaderRuntimes() {
   const el = $('#runtimeStatus');
   if (!navigator.onLine) { if (el) { el.textContent = 'Offline: usando motores já armazenados no cache, quando disponíveis.'; el.className = 'runtime-status warn'; } return; }
   if (el) { el.textContent = 'Preparando motores de PDF/CBR/CBZ para uso offline…'; el.className = 'runtime-status'; }
-  const results = await Promise.allSettled(RUNTIME_URLS.map(url => fetch(url, { mode:'cors', cache:'reload' }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.arrayBuffer(); })));
+  const urls = Object.values(RUNTIME_URLS);
+  const results = await Promise.allSettled(urls.map(url => fetch(url, { mode:'cors', cache:'reload' }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return true; })));
   const ok = results.filter(r => r.status === 'fulfilled').length;
   if (el) {
-    if (ok === RUNTIME_URLS.length) { el.textContent = 'Motores de PDF/CBR/CBZ preparados para uso offline após esta primeira conexão.'; el.className = 'runtime-status ok'; }
-    else { el.textContent = `Motores offline parcialmente preparados (${ok}/${RUNTIME_URLS.length}). O app tentará novamente quando houver internet.`; el.className = 'runtime-status warn'; }
+    if (ok === urls.length) { el.textContent = 'Motores de PDF/CBR/CBZ armazenados para reutilização offline.'; el.className = 'runtime-status ok'; }
+    else { el.textContent = `Motores offline parcialmente preparados (${ok}/${urls.length}). O app tentará novamente quando houver internet.`; el.className = 'runtime-status warn'; }
   }
 }
 
@@ -74,7 +80,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map()
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -82,11 +88,13 @@ const progress = readJson(LS.progress, {});
 const bookmarks = readJson(LS.bookmarks, {});
 const displayPrefs = { brightness:100, contrast:100, sepia:0, ...readJson(LS.display, {}) };
 const itemReaderPrefs = readJson(LS.itemPrefs, {});
+const firstSeen = readJson(LS.firstSeen, {});
 const prefs = { defaultMode: 'spread', direction: 'ltr', performance: 'auto', autoScrollSpeed: 46, ...readJson(LS.prefs, {}) };
 function savePrefs() { storageSet(LS.prefs, JSON.stringify(prefs)); }
 function saveBookmarks() { storageSet(LS.bookmarks, JSON.stringify(bookmarks)); }
 function saveDisplayPrefs() { storageSet(LS.display, JSON.stringify(displayPrefs)); }
 function saveItemReaderPrefs() { storageSet(LS.itemPrefs, JSON.stringify(itemReaderPrefs)); }
+function saveFirstSeen() { storageSet(LS.firstSeen, JSON.stringify(firstSeen)); }
 function persistCurrentReaderPrefs() { if (!state.current?.id) return; itemReaderPrefs[state.current.id] = { mode:state.mode, direction:state.direction, fit:state.fit, trimMargins:Boolean(state.trimMargins) }; saveItemReaderPrefs(); }
 function currentBookmarkKey() { return state.current?.id || ''; }
 function bookmarkedPages() {
@@ -345,6 +353,10 @@ function toast(msg) {
   const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg; document.body.appendChild(el);
   setTimeout(() => el.remove(), 3500);
 }
+document.addEventListener('error', event => {
+  const target = event.target;
+  if (target instanceof HTMLImageElement && target.dataset.removeOnError === '1') target.remove();
+}, true);
 function uniqueItems(items) {
   return [...new Map(items.filter(x => x?.id && x?.name).map(x => [x.id, { ...x, size: Number(x.size || 0) }])).values()];
 }
@@ -749,7 +761,7 @@ function renderCategoryChips() {
 function renderFeaturedCarousel() {
   const host=$('#featuredCarousel'); if(!host) return;
   const list=featuredCollections();
-  host.innerHTML=list.map(g=>{ const lead=g.items[0],thumb=thumbUrl(lead),done=g.items.filter(i=>percentFor(i)>=100).length; return `<article class="featured-card" data-open-collection="${escapeHtml(g.key)}"><div class="featured-cover">${thumb?`<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">`:`<div class="featured-fallback">${escapeHtml(shortCover(g.label))}</div>`}<span class="featured-badge">${escapeHtml(g.category)}</span></div><div class="featured-body"><strong>${escapeHtml(g.label)}</strong><small>${g.items.length} arquivo(s) • ${done} lidos</small><button data-open-collection="${escapeHtml(g.key)}">Abrir coleção</button></div></article>`; }).join('');
+  host.innerHTML=list.map(g=>{ const lead=g.items[0],thumb=thumbUrl(lead),done=g.items.filter(i=>percentFor(i)>=100).length; return `<article class="featured-card" data-open-collection="${escapeHtml(g.key)}"><div class="featured-cover">${thumb?`<img src="${thumb}" alt="" loading="lazy" data-remove-on-error="1">`:`<div class="featured-fallback">${escapeHtml(shortCover(g.label))}</div>`}<span class="featured-badge">${escapeHtml(g.category)}</span></div><div class="featured-body"><strong>${escapeHtml(g.label)}</strong><small>${g.items.length} arquivo(s) • ${done} lidos</small><button data-open-collection="${escapeHtml(g.key)}">Abrir coleção</button></div></article>`; }).join('');
 }
 function scrollFeatured(dir=1){ const host=$('#featuredCarousel'); if(!host)return; host.scrollBy({left:Math.max(260,Math.floor(host.clientWidth*.82))*dir,behavior:'smooth'}); }
 
@@ -802,7 +814,7 @@ function renderContinueRail() {
   $('#continueSection').classList.toggle('hidden', !recent.length || !['all', 'reading'].includes(state.filter) || Boolean(state.collection));
   $('#continueRail').innerHTML = recent.map(item => {
     const pct = percentFor(item), thumb = thumbUrl(item);
-    return `<article class="continue-card" data-id="${escapeHtml(item.id)}"><div class="continue-thumb">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : escapeHtml(shortCover(item.name).slice(0,18))}</div><div class="continue-info"><strong>${escapeHtml(item.name)}</strong><small>${Math.round(pct)}% • pág. ${(progress[item.id]?.page || 0) + 1}</small><button data-continue="${escapeHtml(item.id)}">Continuar</button></div></article>`;
+    return `<article class="continue-card" data-id="${escapeHtml(item.id)}"><div class="continue-thumb">${thumb ? `<img src="${thumb}" alt="" loading="lazy" data-remove-on-error="1">` : escapeHtml(shortCover(item.name).slice(0,18))}</div><div class="continue-info"><strong>${escapeHtml(item.name)}</strong><small>${Math.round(pct)}% • pág. ${(progress[item.id]?.page || 0) + 1}</small><button data-continue="${escapeHtml(item.id)}">Continuar</button></div></article>`;
   }).join('');
 }
 function sourceKeyFor(item) {
@@ -837,7 +849,7 @@ function itemCard(item) {
   const sizeMeta = pageFolder && item.pageCount ? `${item.pageCount} páginas` : bytes(item.size);
   return `<article class="card ${offline ? 'is-offline' : ''}" data-id="${escapeHtml(item.id)}">
     <div class="cover">
-      ${thumb ? `<img class="cover-img" src="${thumb}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+      ${thumb ? `<img class="cover-img" src="${thumb}" alt="" loading="lazy" data-remove-on-error="1">` : ''}
       <span class="badge">${badge}</span>${offline ? '<span class="offline-badge">OFFLINE</span>' : ''}
       <button class="fav ${favorites.has(item.id) ? 'on' : ''}" data-action="fav" title="Favoritar">★</button>
       <div class="cover-word">${escapeHtml(shortCover(item.name))}</div>
@@ -1076,14 +1088,13 @@ async function openItem(item, forceLarge = false) {
 
 async function loadPdfJs() {
   if (!pdfjsModulePromise) {
-    pdfjsModulePromise = import(LOCAL_RUNTIME_URLS.pdf).catch(() => import('https://esm.sh/pdfjs-dist@6.3.289/build/pdf.mjs')).then(async pdfjs => {
-      let localWorker = false; try { const r=await fetch(LOCAL_RUNTIME_URLS.pdfWorker,{method:'HEAD'}); localWorker=r.ok; } catch {}
-      pdfjs.GlobalWorkerOptions.workerSrc = localWorker ? LOCAL_RUNTIME_URLS.pdfWorker : 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.worker.mjs'; return pdfjs;
+    pdfjsModulePromise = import(RUNTIME_URLS.pdf).then(pdfjs => {
+      pdfjs.GlobalWorkerOptions.workerSrc = RUNTIME_URLS.pdfWorker;
+      return pdfjs;
     });
   }
   return pdfjsModulePromise;
 }
-
 async function openPdf(item, token) {
   if (token !== state.openToken) return;
   $('#readerLoading').classList.remove('hidden');
@@ -1203,12 +1214,12 @@ async function downloadDriveFile(item, token, purpose = 'reader') {
 }
 
 async function loadJsZip() {
-  if (!jszipModulePromise) jszipModulePromise = import(LOCAL_RUNTIME_URLS.zip).catch(() => import('https://esm.sh/jszip@3.10.1')).then(m => m.default || m);
+  if (!jszipModulePromise) jszipModulePromise = import(RUNTIME_URLS.zip).then(m => m.default || m);
   return jszipModulePromise;
 }
 async function loadUnrar() {
-  if (!unrarModulePromise) unrarModulePromise = import(LOCAL_RUNTIME_URLS.unrar).catch(() => import('https://esm.sh/node-unrar-js@2.0.2?bundle'));
-  if (!unrarWasmPromise) unrarWasmPromise = fetch(LOCAL_RUNTIME_URLS.unrarWasm).then(r => { if (!r.ok) throw new Error('local unavailable'); return r.arrayBuffer(); }).catch(() => fetch('https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.2/esm/js/unrar.wasm').then(r => { if (!r.ok) throw new Error(`unrar.wasm HTTP ${r.status}`); return r.arrayBuffer(); }));
+  if (!unrarModulePromise) unrarModulePromise = import(RUNTIME_URLS.unrar);
+  if (!unrarWasmPromise) unrarWasmPromise = fetch(RUNTIME_URLS.unrarWasm).then(r => { if (!r.ok) throw new Error(`unrar.wasm HTTP ${r.status}`); return r.arrayBuffer(); });
   return Promise.all([unrarModulePromise, unrarWasmPromise]);
 }
 
@@ -1802,15 +1813,19 @@ function markComplete() {
   saveProgress(); updateLibraryStats(); updateCompleteButton(); render();
 }
 
-async function runtimeAvailability(url) { try { const r=await fetch(url,{method:'HEAD',cache:'no-store'}); return r.ok; } catch { return false; } }
+async function runtimeAvailability(url) {
+  try { const cached = await caches?.match?.(url); if (cached) return true; } catch {}
+  if (!navigator.onLine) return false;
+  try { const r=await fetch(url,{method:'HEAD',cache:'no-store'}); return r.ok; } catch { return false; }
+}
 async function runDiagnostics() {
   const out=$('#diagnosticsResults'); if (!out) return; out.innerHTML='<span>Verificando…</span>';
-  const local = await Promise.all(Object.entries(LOCAL_RUNTIME_URLS).map(async ([k,u])=>[k,await runtimeAvailability(u)]));
+  const local = await Promise.all(Object.entries(RUNTIME_URLS).map(async ([k,u])=>[k,await runtimeAvailability(u)]));
   let sw=false; try { sw=Boolean(await navigator.serviceWorker?.getRegistration?.()); } catch {}
   let quota='indisponível'; try { const e=await navigator.storage?.estimate?.(); if(e?.quota) quota=`${bytes(e.usage||0)} / ${bytes(e.quota)}`; } catch {}
   const rows=[
     ['Internet',navigator.onLine?'OK':'Offline'],['Service Worker',sw?'Ativo':'Inativo'],['Armazenamento',quota],
-    ['PDF.js local',local.find(x=>x[0]==='pdf')?.[1]?'Disponível':'Fallback CDN/cache'],['JSZip local',local.find(x=>x[0]==='zip')?.[1]?'Disponível':'Fallback CDN/cache'],['UnRAR local',local.find(x=>x[0]==='unrar')?.[1]?'Disponível':'Fallback CDN/cache'],
+    ['PDF.js',local.find(x=>x[0]==='pdf')?.[1]?'Disponível/cacheado':'Indisponível'],['JSZip',local.find(x=>x[0]==='zip')?.[1]?'Disponível/cacheado':'Indisponível'],['UnRAR',local.find(x=>x[0]==='unrar')?.[1]?'Disponível/cacheado':'Indisponível'],
     ['Bibliotecas Drive',(CONFIG.folderIds||[]).length],['Catálogo atual',`${state.items.length} itens`],['Modo desempenho',performanceLabel()]
   ];
   out.innerHTML=rows.map(([a,b])=>`<div><strong>${escapeHtml(String(a))}</strong><span>${escapeHtml(String(b))}</span></div>`).join('');
@@ -2284,7 +2299,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.7', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.2.8', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
