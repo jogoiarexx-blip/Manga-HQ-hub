@@ -237,10 +237,12 @@ function applyMobileReadingScaleToSlot(slot, index, width = 0, height = 0) {
   if (!performanceProfile().mobile || !isVerticalMode()) {
     slot.classList.remove('mobile-reading-slot');
     slot.style.removeProperty('--mobile-reading-scale');
+    slot.style.removeProperty('--mobile-reading-width');
     return 1;
   }
   const scale = mobileReadingScaleFor(index, width, height);
   slot.style.setProperty('--mobile-reading-scale', String(scale));
+  slot.style.setProperty('--mobile-reading-width', `${Math.round(scale * 100)}dvw`);
   slot.classList.toggle('mobile-reading-slot', scale > 1.01);
   return scale;
 }
@@ -2111,6 +2113,7 @@ async function renderPdfInto(container, index, token, vertical = false) {
   const canvas = document.createElement('canvas');
   canvas.className = 'pdf-page-canvas';
   canvas.style.setProperty('--mobile-reading-scale', String(mobileReadingScale));
+  canvas.style.setProperty('--mobile-reading-width', `${Math.round(mobileReadingScale * 100)}dvw`);
   canvas.classList.toggle('mobile-reading-enlarged', performanceProfile().mobile && mobileReadingScale > 1.01);
   canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
   canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
