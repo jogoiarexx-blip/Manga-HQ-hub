@@ -458,9 +458,11 @@ async function downloadItem(item) {
 function archiveWarningLimitMB() {
   const configured = Math.max(40, Number(CONFIG.largeArchiveWarningMB || 180));
   const memory = Number(navigator.deviceMemory || 0);
-  if (memory && memory <= 2) return Math.min(configured, 70);
-  if (memory && memory <= 4) return Math.min(configured, 120);
-  return configured;
+  const mobile = matchMedia('(max-width:850px)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
+  if (memory && memory <= 2) return Math.min(configured, 65);
+  if (memory && memory <= 4) return Math.min(configured, 105);
+  if (mobile && !memory) return Math.min(configured, 100);
+  return mobile ? Math.min(configured, 140) : configured;
 }
 
 function resolveExternalUrl(base, value) {
@@ -471,6 +473,8 @@ function resolveExternalUrl(base, value) {
 async function loadExternalCatalogs() {
   const sources = Array.isArray(CONFIG.externalSources) ? CONFIG.externalSources : [];
   const items = [];
+  let firstSeenDirty = false;
+  const seenNow = Date.now();
   for (let index = 0; index < sources.length; index++) {
     const src = sources[index] || {};
     if (!src.catalogUrl) continue;
@@ -487,8 +491,10 @@ async function loadExternalCatalogs() {
         const rawId = String(row?.id || row?.title || row?.name || '');
         const name = String(row?.title || row?.name || rawId).trim();
         if (!rawId || !name) continue;
+        const stableId = `external:${sourceId}:${rawId}`;
+        if (!Number(firstSeen[stableId])) { firstSeen[stableId] = seenNow; firstSeenDirty = true; }
         items.push({
-          id: `external:${sourceId}:${rawId}`,
+          id: stableId,
           name,
           readerType: 'web-pages',
           mimeType: 'application/x-mhqr-web-pages',
@@ -500,6 +506,7 @@ async function loadExternalCatalogs() {
           externalSourceName: sourceName,
           seriesTitle: String(row?.collectionTitle || ''),
           issueNumber: row?.issue ?? null,
+          modifiedTime: String(row?.modifiedTime || row?.updatedAt || row?.addedAt || new Date(Number(firstSeen[stableId]) || seenNow).toISOString()),
           folderPath: String(row?.collectionTitle || data?.name || sourceName),
           size: 0
         });
@@ -508,6 +515,7 @@ async function loadExternalCatalogs() {
       console.warn('Falha ao carregar acervo externo:', src?.name || src?.catalogUrl, err);
     }
   }
+  if (firstSeenDirty) saveFirstSeen();
   return uniqueItems(items);
 }
 async function loadStaticCatalog() {
@@ -843,8 +851,10 @@ function itemCard(item) {
   const type = extType(item), pct = percentFor(item), thumb = thumbUrl(item);
   const status = pct >= 100 ? 'concluído' : pct ? `${Math.round(pct)}% lido` : 'não iniciado';
   const pageFolder = type === 'pages';
-  const offline = !pageFolder && state.offlineIds.has(item.offlineOriginId || item.id);
-  const offlineBusy = !pageFolder && state.offlineBusy.has(item.offlineOriginId || item.id);
+  const offlineCapable = !pageFolder || Boolean(item.manifestUrl);
+  const offline = state.offlineIds.has(item.offlineOriginId || item.id);
+  const offlineBusy = state.offlineBusy.has(item.offlineOriginId || item.id);
+  const offlineProgress = state.offlineProgress.get(item.offlineOriginId || item.id);
   const badge = type === 'pdf' ? 'PDF' : type === 'comic' ? 'CBR/CBZ' : pageFolder ? 'WEBP' : 'ARQ';
   const sizeMeta = pageFolder && item.pageCount ? `${item.pageCount} páginas` : bytes(item.size);
   return `<article class="card ${offline ? 'is-offline' : ''}" data-id="${escapeHtml(item.id)}">
@@ -858,7 +868,7 @@ function itemCard(item) {
       <div class="title">${escapeHtml(item.name)}</div>
       <div class="meta"><span>${escapeHtml(sizeMeta)}</span><span>${status}</span></div><div class="source-line"><span class="source-chip source-${escapeHtml(sourceKeyFor(item))}">${escapeHtml(sourceLabelFor(item))}</span>${item.folderPath ? `<span class="source-path" title="${escapeHtml(item.folderPath)}">${escapeHtml(cleanFolderLabel(item.folderPath) || item.folderPath)}</span>` : ''}</div>
       <div class="progress"><i style="width:${pct}%"></i></div>
-      <div class="card-actions"><button data-action="read">${pct >= 100 ? 'Ler novamente' : pct ? 'Continuar' : 'Ler agora'}</button>${pageFolder ? '' : `<button class="secondary offline-action ${offline ? 'on' : ''}" data-action="offline" title="${offline ? 'Remover do offline' : 'Salvar para ler offline'}">${offlineBusy ? '…' : offline ? '✓' : '☁'}</button><button class="secondary download-action" data-action="download" title="Baixar arquivo">⇩</button>`}${item.localFile ? '' : `<button class="secondary" data-action="drive" title="${item.externalSourceId ? 'Abrir acervo' : 'Abrir no Drive'}">↗</button>`}</div>
+      <div class="card-actions"><button data-action="read">${pct >= 100 ? 'Ler novamente' : pct ? 'Continuar' : 'Ler agora'}</button>${offlineCapable ? `<button class="secondary offline-action ${offline ? 'on' : ''}" data-action="offline" title="${offline ? 'Remover do offline' : 'Salvar para ler offline'}">${offlineBusy ? (offlineProgress?.pct != null ? `${offlineProgress.pct}%` : '…') : offline ? '✓' : '☁'}</button>` : ''}${pageFolder ? '' : `<button class="secondary download-action" data-action="download" title="Baixar arquivo">⇩</button>`}${item.localFile ? '' : `<button class="secondary" data-action="drive" title="${item.externalSourceId ? 'Abrir acervo' : 'Abrir no Drive'}">↗</button>`}</div>
     </div>
   </article>`;
 }
@@ -953,7 +963,8 @@ function setReaderButtons(type) {
   $('#directionBtn').classList.toggle('hidden', !readable);
   $('#fitBtn').classList.toggle('hidden', !readable);
   $('#zoomControls').classList.toggle('hidden', !readable);
-  $('#offlineCurrentBtn')?.classList.toggle('hidden', pageFolder);
+  const canSaveOffline = !pageFolder || Boolean(state.current?.manifestUrl);
+  $('#offlineCurrentBtn')?.classList.toggle('hidden', !canSaveOffline);
   $('#downloadCurrentBtn')?.classList.toggle('hidden', pageFolder);
   $('#readerFooter').classList.add('hidden');
   updateCompleteButton();
@@ -963,7 +974,8 @@ function updateOfflineCurrentButton() {
   const btn = $('#offlineCurrentBtn'); if (!btn || !state.current) return;
   const id = state.current.offlineOriginId || state.current.id;
   const saved = state.offlineIds.has(id);
-  btn.textContent = saved ? '✓ Offline' : '☁ Salvar offline';
+  const pending = state.offlineProgress.get(id);
+  btn.textContent = pending ? `☁ ${pending.pct}%` : saved ? '✓ Offline' : '☁ Salvar offline';
   btn.classList.toggle('is-offline', saved);
   btn.title = saved ? 'Remover arquivo da biblioteca offline' : 'Salvar para ler sem internet';
 }
@@ -1164,14 +1176,14 @@ async function fetchArrayBufferWithProgress(url, headers = {}, signal, token) {
     if (target && offset + value.byteLength <= target.length) {
       target.set(value, offset); offset += value.byteLength;
     } else {
-      if (target) { chunks.push(target.slice(0, offset)); target = null; }
+      if (target) { chunks.push(target.subarray(0, offset)); target = null; }
       chunks.push(value);
     }
     if (token === state.openToken && !$('#reader').classList.contains('hidden')) {
       $('#loadingText').textContent = total ? `Baixando… ${Math.min(100, Math.round(received / total * 100))}% (${bytes(received)} / ${bytes(total)})` : `Baixando… ${bytes(received)}`;
     }
   }
-  if (target) return target.slice(0, offset).buffer;
+  if (target) return offset === target.byteLength ? target.buffer : target.buffer.slice(0, offset);
   const all = new Uint8Array(received); let pos = 0;
   for (const chunk of chunks) { all.set(chunk, pos); pos += chunk.byteLength; }
   return all.buffer;
@@ -1280,7 +1292,7 @@ async function prepareArchive(item, data, token) {
 }
 
 async function openComic(item, token) {
-  if (item.size > 180*1024*1024 && prefs.performance === 'auto') toast('Arquivo grande: o leitor reduzirá cache e pré-carregamento para poupar memória.');
+  if (item.size > archiveWarningLimitMB()*1024*1024 && prefs.performance === 'auto') toast('Arquivo grande: o leitor reduzirá cache e pré-carregamento para poupar memória.');
   $('#readerLoading').classList.remove('hidden');
   $('#loadingText').textContent = item.localFile ? 'Lendo arquivo do aparelho…' : 'Conectando ao Google Drive…';
   $('#readerBody').innerHTML = ''; $('#readerFooter').classList.add('hidden');
