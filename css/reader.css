@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.1 */
+/* Manga-HQ-hub reader styles — v0.3.6 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -672,4 +672,178 @@
 .reader-close-btn{position:relative;z-index:181;pointer-events:auto;touch-action:manipulation}
 @media(max-width:850px){
   .reader-close-btn{width:44px!important;height:44px!important;min-width:44px}
+}
+
+
+/* Manga-HQ-hub v0.3.6 — mobile full-bleed reader */
+@media(max-width:850px){
+  .reader.mobile-fullbleed{
+    display:block!important;
+    width:100dvw!important;
+    height:100dvh!important;
+    min-width:100dvw!important;
+    min-height:100dvh!important;
+    overflow:hidden!important;
+    background:#000!important;
+  }
+  .reader.mobile-fullbleed .reader-body{
+    position:absolute!important;
+    inset:0!important;
+    width:100dvw!important;
+    height:100dvh!important;
+    min-width:100dvw!important;
+    min-height:100dvh!important;
+    max-width:100dvw!important;
+    max-height:100dvh!important;
+    padding:0!important;
+    margin:0!important;
+    background:#000!important;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .reader.mobile-fullbleed .reader-topbar{
+    position:absolute!important;
+    z-index:180!important;
+    top:0;
+    left:0;
+    right:0;
+    height:auto!important;
+    min-height:52px!important;
+    padding:
+      max(4px,env(safe-area-inset-top,0px))
+      max(8px,env(safe-area-inset-right,0px))
+      4px
+      max(8px,env(safe-area-inset-left,0px))!important;
+    border:0!important;
+    background:linear-gradient(180deg,rgba(0,0,0,.76),rgba(0,0,0,.18),transparent)!important;
+    backdrop-filter:none!important;
+    pointer-events:none;
+  }
+  .reader.mobile-fullbleed .reader-topbar>.reader-close-btn,
+  .reader.mobile-fullbleed .reader-topbar>.reader-menu-btn,
+  .reader.mobile-fullbleed .reader-controls{
+    pointer-events:auto;
+  }
+  .reader.mobile-fullbleed:not(.controls-open) .reader-title-wrap{
+    opacity:0;
+    pointer-events:none;
+  }
+  .reader.mobile-fullbleed .reader-close-btn,
+  .reader.mobile-fullbleed .reader-menu-btn{
+    background:rgba(0,0,0,.48)!important;
+    border:1px solid rgba(255,255,255,.12)!important;
+    color:#fff!important;
+    backdrop-filter:blur(8px);
+  }
+  .reader.mobile-fullbleed .reader-footer:not(.hidden){
+    position:absolute!important;
+    z-index:175!important;
+    left:6px;
+    right:6px;
+    bottom:max(6px,env(safe-area-inset-bottom,0px));
+    min-height:50px!important;
+    padding:4px 6px!important;
+    border:1px solid rgba(255,255,255,.10)!important;
+    border-radius:15px!important;
+    background:rgba(3,5,8,.66)!important;
+    backdrop-filter:blur(12px)!important;
+    box-shadow:0 10px 30px rgba(0,0,0,.36);
+  }
+  .reader.mobile-fullbleed .page-stage{
+    width:100dvw!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-width:100dvw!important;
+    padding:0!important;
+    margin:0!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-page .page-stage:not(.spread-stage)>img,
+  .reader.mobile-fullbleed.reader-mode-page .page-stage:not(.spread-stage)>.pdf-page-mount>.pdf-page-canvas,
+  .reader.mobile-fullbleed.reader-mode-page .pdf-page-canvas{
+    width:auto!important;
+    height:auto!important;
+    max-width:100dvw!important;
+    max-height:100dvh!important;
+    margin:auto!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    object-fit:contain!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-page .pdf-page-mount{
+    width:100%!important;
+    height:100%!important;
+    max-width:100dvw!important;
+    max-height:100dvh!important;
+    display:grid!important;
+    place-items:center!important;
+    background:#000!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-spread .page-stage.flipbook-stage{
+    width:100dvw!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-width:100dvw!important;
+    padding:0!important;
+    border-radius:0!important;
+    background:#000!important;
+    box-shadow:none!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-spread .flipbook-page>img,
+  .reader.mobile-fullbleed.reader-mode-spread .flipbook-page .pdf-page-canvas{
+    width:100%!important;
+    height:auto!important;
+    max-width:100%!important;
+    max-height:100dvh!important;
+    object-fit:contain!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-spread .flipbook-stage.single-page>.flipbook-page,
+  .reader.mobile-fullbleed.reader-mode-spread .flipbook-stage.cover-only>.flipbook-page{
+    width:min(100dvw,calc(100dvh * .78))!important;
+    max-width:100dvw!important;
+    flex-basis:auto!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-spread .flipbook-stage.single-wide>.flipbook-page{
+    width:100dvw!important;
+    max-width:100dvw!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .reader-body{
+    display:block!important;
+    overflow:auto!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .vertical-pages,
+  .reader.mobile-fullbleed.reader-mode-vertical .webtoon-pages{
+    width:100dvw!important;
+    max-width:100dvw!important;
+    padding:0!important;
+    margin:0!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot{
+    width:100dvw!important;
+    max-width:100dvw!important;
+    margin:0!important;
+    border-radius:0!important;
+  }
+  .reader.mobile-fullbleed .reader-loading{
+    position:absolute!important;
+    inset:0!important;
+    z-index:190!important;
+    padding:70px 20px 20px!important;
+  }
+  .reader.mobile-fullbleed .thumb-drawer{
+    top:0!important;
+    bottom:0!important;
+    padding-top:max(8px,env(safe-area-inset-top,0px));
+  }
+  .reader.mobile-fullbleed .reader-display-panel{
+    z-index:185!important;
+  }
+}
+@media(max-width:430px){
+  .reader.mobile-fullbleed .reader-footer .page-jump input{display:none}
+  .reader.mobile-fullbleed .reader-footer{gap:4px!important}
+  .reader.mobile-fullbleed .reader-footer button{width:40px!important;height:40px!important;min-width:40px!important}
 }
