@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.1',
+  appVersion: '0.3.12',
   folderIds: [],
   folderUrls: [],
   folderId: '',
