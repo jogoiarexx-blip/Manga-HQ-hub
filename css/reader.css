@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.10 */
+/* Manga-HQ-hub reader styles — v0.3.11 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -1020,4 +1020,46 @@
 .reader-mode-vertical .vertical-pages,
 .reader-mode-vertical .webtoon-pages{
   padding-top:0!important;
+}
+
+
+/* Manga-HQ-hub v0.3.11 — PDF mobile */
+.pdf-quality-control{
+  border-color:rgba(14,165,233,.36);
+  background:rgba(14,165,233,.07);
+}
+.pdf-page-canvas{
+  image-rendering:auto;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+}
+.pdf-page-canvas.pdf-pinch-preview{
+  will-change:transform;
+  transition:none!important;
+  position:relative;
+  z-index:4;
+}
+@media(max-width:850px){
+  .reader.mobile-fullbleed.reader-mode-page .pdf-page-mount{
+    overflow:visible!important;
+    align-content:center!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-page .pdf-page-canvas{
+    transform-origin:center center;
+    box-shadow:none!important;
+  }
+  .reader.mobile-fullbleed .pdf-slot{
+    min-height:0!important;
+  }
+  .reader.mobile-fullbleed .pdf-slot .pdf-page-canvas{
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  .pdf-quality-control select{
+    min-height:44px;
+    font-size:14px;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .pdf-page-canvas.pdf-pinch-preview{transition:none!important}
 }
