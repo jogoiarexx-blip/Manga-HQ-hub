@@ -1,44 +1,50 @@
-# Manga-HQ-hub v0.3.9
+# Manga-HQ-hub v0.3.10
 
-Leitor/PWA de mangás e HQs com catálogo A–Z, Acervo 1, Acervo 2 e Acervo Marvel.
+Leitor/PWA de mangás e HQs com Acervo 1, Acervo 2 e Acervo Marvel.
 
-## v0.3.9 — leitura de mangás com baixa resolução
+## v0.3.10 — leitura realmente legível no celular
 
-Foi adicionado um filtro de legibilidade leve para scans e imagens antigas sem transformar o leitor em um processador pesado.
+A imagem enviada mostrou que o problema não era só contraste: a página inteira cabia na largura do telefone, deixando os balões pequenos demais, e havia espaço preto desperdiçado antes da página.
 
-### Modos do filtro
+### Zoom móvel de leitura
 
-- **Desligado:** mostra a página original.
-- **Automático:** detecta páginas raster pequenas e aplica reforço leve somente nelas.
-- **Forte / scan borrado:** força o reforço visual, inclusive em PDFs escaneados.
+Novo controle em **Aa Visual**:
 
-### Como o Automático detecta baixa resolução
+- **100% / sem ampliação**
+- **Automático**
+- **125%**
+- **150%**
+- **175%**
+- **200%**
 
-A página é tratada como baixa resolução quando as dimensões indicam um scan pequeno, por exemplo aproximadamente 800×1200, 1000×1500 ou abaixo de cerca de 1,6 megapixel.
+No modo **Automático**:
+- scans pequenos detectados como baixa resolução podem abrir em aproximadamente **170%**;
+- páginas normais altas ficam por volta de **135%**;
+- páginas mais largas usam ampliação menor.
 
-PDFs não são alterados automaticamente porque o PDF.js informa o tamanho da página, não a resolução real da imagem escaneada dentro dela. Para um PDF antigo/borrado, use **Forte**.
+A página fica maior que a tela e pode ser arrastada lateralmente. Isso aumenta o tamanho real dos balões e letras sem recodificar o arquivo.
 
 ### Desempenho
 
-O filtro não usa IA, upscale, WebGL ou convolução em canvas.
+- WebP/JPG/CBR/CBZ usam a mesma imagem já carregada; só muda o tamanho de exibição.
+- Não há IA nem upscale pesado.
+- PDF é rerenderizado maior quando necessário, mas continua limitado pelo orçamento de pixels do leitor.
+- O filtro de baixa resolução continua separado e pode ser usado junto com o zoom móvel.
 
-Ele trabalha somente nas páginas visíveis usando:
-- contraste leve;
-- pequeno ajuste de brilho;
-- suavização normal do navegador;
-- saturação quase neutra.
+### Correção do espaço preto
 
-Isso evita duplicar imagens ou criar canvases extras e mantém o consumo de RAM próximo ao leitor normal.
+- Vertical/Webtoon passam a começar no topo.
+- Slots já carregados deixam de manter altura reservada artificial.
+- Primeira página não recebe margem superior extra.
+- O leitor continua usando 100dvw × 100dvh no celular.
 
-### Leitor
+### Combinação recomendada para scans antigos
 
-- PDF e WebP continuam usando tela cheia no celular.
-- Página única, Flipbook, Vertical e Webtoon permanecem disponíveis.
-- O filtro funciona em página única, Flipbook e Vertical/Webtoon.
-- As preferências visuais continuam salvas localmente.
-- **Restaurar** volta o filtro para Automático.
+- **Baixa resolução: Automático**
+- **Zoom móvel: Automático**
+- Se ainda estiver difícil: **Baixa resolução: Forte** + **Zoom móvel: 175%**
 
-### Acervos
+## Acervos
 
 - Manga HQ Acervo 1
 - Manga HQ Acervo 2
