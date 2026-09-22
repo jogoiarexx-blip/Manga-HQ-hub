@@ -462,9 +462,43 @@ function uniqueItems(items) {
 
 const generatedPdfCovers = new Map();
 const pendingPdfCovers = new Map();
+const pdfCoverQueue = [];
+const pdfCoverQueued = new Set();
+let pdfCoverActive = 0;
+let pdfCoverRenderScheduled = false;
+
+function generatedPdfCoverUrl(id) {
+  const url = generatedPdfCovers.get(id);
+  if (!url) return '';
+  generatedPdfCovers.delete(id);
+  generatedPdfCovers.set(id, url);
+  return url;
+}
+function rememberGeneratedPdfCover(id, url) {
+  const previous = generatedPdfCovers.get(id);
+  if (previous && previous !== url && previous.startsWith('blob:')) URL.revokeObjectURL(previous);
+  generatedPdfCovers.delete(id);
+  generatedPdfCovers.set(id, url);
+
+  const limit = performanceProfile().mobile ? 24 : 48;
+  while (generatedPdfCovers.size > limit) {
+    const [oldId, oldUrl] = generatedPdfCovers.entries().next().value || [];
+    if (!oldId) break;
+    generatedPdfCovers.delete(oldId);
+    if (String(oldUrl).startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+  }
+}
+function schedulePdfCoverRender() {
+  if (pdfCoverRenderScheduled) return;
+  pdfCoverRenderScheduled = true;
+  requestAnimationFrame(() => {
+    pdfCoverRenderScheduled = false;
+    if (!document.hidden) render();
+  });
+}
 
 function thumbUrl(item) {
-  const generated = generatedPdfCovers.get(item?.id);
+  const generated = generatedPdfCoverUrl(item?.id);
   if (generated) return generated;
   if (item.coverUrl) return item.coverUrl;
   if (item.localFile && !item.thumbnailLink) return '';
@@ -865,7 +899,7 @@ async function loadLibrary() {
     state.items = await loadStaticCatalog().catch(()=>[]); $('#syncStatus').textContent='Falha no catálogo'; $('#syncDetail').textContent=err.message; toast(`Falha ao carregar biblioteca: ${err.message}`);
   } finally {
     for (const meta of state.offlineMeta.values()) if (!state.items.some(x=>x.id===meta.id)) state.items.push({ ...meta });
-    state.items=uniqueItems(state.items); $('#refreshBtn').disabled=false; resetRenderLimit(); render();
+    state.items=uniqueItems(state.items); prunePdfCoverCache(); $('#refreshBtn').disabled=false; resetRenderLimit(); render();
   }
 }
 
@@ -1345,9 +1379,8 @@ async function generatePdfCover(item) {
         || await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', .86));
       if (!blob) return '';
       const url = URL.createObjectURL(blob);
-      const previous = generatedPdfCovers.get(item.id);
-      if (previous?.startsWith?.('blob:')) URL.revokeObjectURL(previous);
-      generatedPdfCovers.set(item.id, url);
+      rememberGeneratedPdfCover(item.id, url);
+      canvas.width = 1; canvas.height = 1;
       return url;
     } finally {
       await doc?.destroy?.().catch(() => {});
@@ -1357,17 +1390,45 @@ async function generatePdfCover(item) {
   pendingPdfCovers.set(item.id, job);
   return job;
 }
+function pumpPdfCoverQueue() {
+  const limit = performanceProfile().mobile ? 1 : 2;
+  while (pdfCoverActive < limit && pdfCoverQueue.length) {
+    const item = pdfCoverQueue.shift();
+    if (!item?.id) continue;
+    pdfCoverQueued.delete(item.id);
+    if (generatedPdfCovers.has(item.id) || pendingPdfCovers.has(item.id) || item.coverUrl) continue;
 
+    pdfCoverActive++;
+    generatePdfCover(item).then(url => {
+      if (url) schedulePdfCoverRender();
+    }).catch(() => {}).finally(() => {
+      pdfCoverActive = Math.max(0, pdfCoverActive - 1);
+      pumpPdfCoverQueue();
+    });
+  }
+}
 function hydratePdfCovers(items = state.items) {
+  if (document.hidden || performanceProfile().slowConnection) return;
+  const maxQueued = performanceProfile().mobile ? 5 : 10;
   const targets = (items || []).filter(item =>
     extType(item) === 'pdf' && item.fileUrl && !item.coverUrl &&
-    !generatedPdfCovers.has(item.id) && !pendingPdfCovers.has(item.id)
-  ).slice(0, 8);
-  if (!targets.length) return;
+    !generatedPdfCovers.has(item.id) && !pendingPdfCovers.has(item.id) &&
+    !pdfCoverQueued.has(item.id)
+  ).slice(0, maxQueued);
 
-  Promise.allSettled(targets.map(generatePdfCover)).then(results => {
-    if (results.some(result => result.status === 'fulfilled' && result.value)) render();
-  });
+  for (const item of targets) {
+    pdfCoverQueued.add(item.id);
+    pdfCoverQueue.push(item);
+  }
+  pumpPdfCoverQueue();
+}
+function prunePdfCoverCache() {
+  const valid = new Set(state.items.map(item => item.id));
+  for (const [id, url] of [...generatedPdfCovers.entries()]) {
+    if (valid.has(id)) continue;
+    generatedPdfCovers.delete(id);
+    if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
+  }
 }
 async function openPdf(item, token) {
   if (token !== state.openToken) return;
@@ -2272,6 +2333,12 @@ async function runDiagnostics() {
     ['PDF.js',local.find(x=>x[0]==='pdf')?.[1]?'Disponível/cacheado':'Indisponível'],['JSZip',local.find(x=>x[0]==='zip')?.[1]?'Disponível/cacheado':'Indisponível'],['UnRAR',local.find(x=>x[0]==='unrar')?.[1]?'Disponível/cacheado':'Indisponível'],
     ['Bibliotecas Drive',(CONFIG.folderIds||[]).length],['Catálogo atual',`${state.items.length} itens`],['Modo desempenho',performanceLabel()]
   ];
+  for (const src of (CONFIG.externalSources || [])) {
+    const id=String(src?.id || '');
+    const status=state.externalSourceStatus.get(id);
+    const count=state.items.filter(item => String(item.externalSourceId || '') === id).length;
+    rows.push([src.name || id, status?.ok ? `OK • ${count} itens • ${status.elapsed || 0} ms` : status ? `Cache/falha • ${count} itens` : `${count} itens`]);
+  }
   out.innerHTML=rows.map(([a,b])=>`<div><strong>${escapeHtml(String(a))}</strong><span>${escapeHtml(String(b))}</span></div>`).join('');
 }
 function openSettings() {
