@@ -1,53 +1,47 @@
-# Manga-HQ-hub v0.3.11
+# Manga-HQ-hub v0.3.12
 
-Leitor/PWA de mangás e HQs com foco em leitura confortável no celular.
+Leitor/PWA de mangás e HQs com foco em PDF e leitura confortável no celular.
 
-## v0.3.11 — leitor PDF mobile melhorado
+## v0.3.12 — PDF mobile ainda mais fluido
 
-### Nitidez adaptativa
+### Troca de página sem piscar
 
-O PDF agora usa uma qualidade diferente para a página que está sendo lida e para páginas secundárias.
+No modo Página única do celular, o leitor não apaga mais a página atual antes da próxima ficar pronta.
 
-No celular:
-- a página atual pode usar DPR maior;
-- o limite de pixels continua ativo;
-- Vertical/Webtoon usam qualidade mais leve nas páginas fora do foco;
-- o modo Nítido aumenta a resolução sem renderizar o PDF inteiro em alta qualidade.
+Agora:
+1. a página atual continua visível;
+2. a nova página é renderizada em uma área de staging invisível;
+3. quando o canvas novo termina, ocorre a troca;
+4. o canvas antigo é liberado da memória.
 
-### Qualidade PDF
+Isso elimina boa parte do flash preto/branco durante a navegação sem manter várias páginas pesadas em cache.
 
-Novo controle em **Aa Visual**:
+### Qualidade adaptativa no Vertical PDF
 
-- **Econômico** — menor consumo de RAM e bateria;
-- **Automático** — mais nitidez na página atual e equilíbrio nas demais;
-- **Nítido** — prioriza texto fino e scans pequenos.
+- A página atual recebe DPR maior.
+- Páginas vizinhas são renderizadas mais leves.
+- Quando uma página vizinha entra no foco e a rolagem para, ela é promovida automaticamente para qualidade superior.
+- A promoção usa debounce para evitar rerender a cada pixel de rolagem.
+- Renders que saem da janela continuam sendo cancelados.
 
-### Zoom e pinch
+### Margens
 
-- Pinch em PDF mostra uma prévia instantânea por CSS durante o gesto.
-- O PDF só é rerenderizado em alta qualidade quando os dedos são soltos.
-- O ponto central do gesto é preservado ao finalizar o zoom.
-- Duplo toque continua ampliando no ponto tocado.
+O botão **✂ Margens** agora tem efeito visual real no PDF.
 
-### PDF no celular
+- Página única: amplia levemente o canvas para esconder bordas brancas.
+- Vertical/Webtoon: corta uma pequena faixa lateral.
+- É totalmente opcional e fica salvo por arquivo.
+- Não faz análise de imagem nem crop pesado em canvas.
 
-- Um PDF novo abre em **Página única** por padrão no celular em retrato.
-- Isso só acontece quando não existe uma preferência anterior para aquele arquivo.
-- Depois que o usuário escolhe Flipbook, Vertical ou Webtoon, essa escolha continua salva.
-- PDFs verticais altos usam ampliação automática maior para deixar balões e letras mais legíveis.
+### PDF mobile mantido da v0.3.11
 
-### Carregamento
-
-- Em celular/conexão lenta, o PDF.js evita auto-baixar partes desnecessárias do arquivo.
-- Range requests continuam habilitados.
-- O progresso de carregamento é mostrado em porcentagem quando o servidor fornece o tamanho.
-- As páginas anterior e seguinte têm metadados aquecidos em segundo plano, sem renderização pesada.
-
-### Memória
-
-- Renders verticais fora da janela de leitura podem ser cancelados.
-- Ao fechar/trocar documento, tarefas PDF verticais são canceladas.
-- O orçamento de pixels continua protegendo aparelhos com pouca memória.
+- Qualidade PDF: Econômico, Automático e Nítido.
+- Pinch com prévia instantânea e rerender final nítido.
+- Página única padrão para PDF novo em celular retrato.
+- Range requests.
+- Progresso de carregamento.
+- Ampliação móvel automática.
+- Limite de pixels para proteger RAM.
 
 ## Acervos
 
