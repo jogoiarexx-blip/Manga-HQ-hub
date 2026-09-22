@@ -232,7 +232,7 @@ async function refreshOfflineIndex() {
         id:r.id, name:r.name, size:Number(r.size || r.blob?.size || 0), mimeType:r.mimeType,
         modifiedTime:r.modifiedTime, folderPath:r.folderPath, resourceKey:r.resourceKey,
         savedAt:r.savedAt, offline:true, kind:r.kind || 'file', readerType:r.readerType,
-        manifestUrl:r.manifestUrl, coverUrl:r.coverUrl, sourceUrl:r.sourceUrl,
+        manifestUrl:r.manifestUrl, coverUrl:r.coverUrl, sourceUrl:r.sourceUrl, fileUrl:r.fileUrl,
         externalSourceId:r.externalSourceId, externalSourceName:r.externalSourceName,
         seriesTitle:r.seriesTitle, issueNumber:r.issueNumber, pageCount:Number(r.pageCount || 0)
       };
@@ -356,16 +356,26 @@ async function saveItemOffline(item) {
         } catch (err) { if (/Espaço insuficiente/.test(err?.message || '')) throw err; }
 
         if (item.fileUrl) {
-          const response = await fetch(item.fileUrl, { mode:'cors', cache:'no-store' });
+          const controller = new AbortController();
+          state.offlineControllers.set(id, controller);
+          const response = await fetch(item.fileUrl, { mode:'cors', cache:'no-store', signal:controller.signal });
           if (!response.ok) throw new Error(`Arquivo externo: HTTP ${response.status}`);
           blob = await response.blob();
+          if (controller.signal.aborted) throw new DOMException('Salvamento offline cancelado.', 'AbortError');
         } else {
           if (!getApiKey()) toast('Preparando cópia offline. Se o Drive bloquear, configure a API Key.');
           const data = await downloadDriveFile(item, -1, 'offline');
           blob = new Blob([data], { type: item.mimeType || 'application/octet-stream' });
         }
       }
-      const record = { id, kind:'file', name:item.name, size:Number(item.size || blob.size), mimeType:item.mimeType || blob.type, modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '', resourceKey:item.resourceKey || '', savedAt:Date.now(), blob };
+      const record = {
+        id, kind:'file', name:item.name, size:Number(item.size || blob.size), mimeType:item.mimeType || blob.type,
+        modifiedTime:item.modifiedTime || '', folderPath:item.folderPath || '', resourceKey:item.resourceKey || '',
+        fileUrl:item.fileUrl || '', coverUrl:item.coverUrl || '', sourceUrl:item.sourceUrl || '',
+        externalSourceId:item.externalSourceId || '', externalSourceName:item.externalSourceName || '',
+        seriesTitle:item.seriesTitle || '', issueNumber:item.issueNumber ?? null, pageCount:Number(item.pageCount || 0),
+        savedAt:Date.now(), blob
+      };
       await offlineDbAction('readwrite', (store) => store.put(record));
       state.offlineIds.add(id);
       state.offlineMeta.set(id, { ...record, blob: undefined, offline:true });
@@ -883,7 +893,7 @@ async function loadLibrary() {
       $('#catalogNotice').classList.toggle('hidden', !failed); if (failed) $('#catalogNoticeText').textContent='Uma biblioteca falhou; as demais foram atualizadas e a que falhou manteve o último catálogo disponível.';
     } else {
       state.syncStatus=[]; renderSyncProgress();
-      state.items = await loadStaticCatalog(); const sm=readJson(LS.syncMeta,{}); const last=formatDateTime(sm.at);
+      state.items = await loadStaticCatalog(); saveCatalogCache(state.items); const sm=readJson(LS.syncMeta,{}); const last=formatDateTime(sm.at);
       const externalCount = state.items.filter(item => item.externalSourceId).length;
       const sourceParts = (CONFIG.externalSources || []).map(src => {
         const id=String(src?.id || '');
