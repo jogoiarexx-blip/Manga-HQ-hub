@@ -1,10 +1,10 @@
-# Manga-HQ-hub v0.2.5
+# Manga-HQ-hub v0.2.6
 
 Hub de mangás e HQs com acervo WebP conectado e leitor integrado.
 
 ## Versão atual
 
-**0.2.5** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
+**0.2.6** — esta passa a ser a base oficial de versionamento do projeto. As próximas atualizações devem continuar a partir dela.
 
 ## Recursos atuais
 
@@ -31,3 +31,13 @@ Hub de mangás e HQs com acervo WebP conectado e leitor integrado.
 
 Manga HQ Acervo:
 https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/
+
+
+### v0.2.6 — otimização de leitura no celular
+- limite adaptativo de pixels para PDFs, reduzindo uso de RAM e travamentos;
+- pré-carregamento em segundo plano, respeitando economia de dados e conexões lentas;
+- cache menor em aparelhos compactos;
+- liberação de canvas/imagens ao trocar de página;
+- páginas panorâmicas do acervo detectadas pelo manifesto e exibidas sozinhas;
+- navegação cancela renderização PDF anterior ao avançar rapidamente;
+- Flipbook mobile mais leve, mantendo duas páginas quando apropriado.
