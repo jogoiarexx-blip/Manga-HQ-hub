@@ -2462,8 +2462,9 @@ $('#readerBody').addEventListener('touchstart', e => {
     state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
     return;
   }
-  if (e.touches.length !== 1 || state.zoom > 1.01) return;
+  if (e.touches.length !== 1) return;
   const t = e.touches[0]; state.touchStart = { x: t.clientX, y: t.clientY, time: Date.now() };
+  if (state.zoom > 1.01) return;
   if (effectiveMode() === 'spread' && e.target.closest('.flipbook-stage:not(.single-wide)')) state.flipDrag = { startX:t.clientX, startY:t.clientY, dx:0, time:Date.now(), pointerId:null };
 }, { passive: true });
 $('#readerBody').addEventListener('touchmove', e => {
