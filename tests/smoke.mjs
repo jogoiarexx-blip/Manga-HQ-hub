@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.2.8';
+const VERSION = '0.2.9';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -31,6 +31,9 @@ assert(!css.includes('\\\\n') && !readerCss.includes('\\\\n'), 'CSS must not con
 assert(!app.includes('LOCAL_RUNTIME_URLS'), 'no references to missing local vendor runtimes');
 assert(app.includes("import('./modules/offline-webp.js')"), 'WebP offline module wired');
 assert(index.includes('Content-Security-Policy'), 'CSP meta is present');
+assert(index.includes('keepZoomSelect'), 'keep zoom preference is present');
+assert(app.includes('function zoomAtPoint'), 'point-centered zoom helper is present');
+assert(app.includes('function flipbookLayoutClass'), 'flipbook single-page layout helper is present');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
