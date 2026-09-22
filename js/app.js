@@ -1082,6 +1082,60 @@ function renderSourceOptions() {
   select.value = state.source;
 }
 
+const CATALOG_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+function alphaLetterFor(item) {
+  const text = normalizeText(item?.name || '').toUpperCase().trim();
+  const first = text.match(/[A-Z]/)?.[0] || '#';
+  return CATALOG_ALPHABET.includes(first) ? first : '#';
+}
+function alphaSectionKey(letter) { return letter === '#' ? 'num' : String(letter || '').toLowerCase(); }
+function renderAlphabetIndex(items = filtered()) {
+  const host = $('#alphabetIndex'); if (!host) return;
+  const hidden = state.filter === 'collections' || state.filter === 'bookmarks' || Boolean(state.collection);
+  host.classList.toggle('hidden', hidden);
+  if (hidden) return;
+
+  const ordered = [...items].sort((a,b)=>naturalSort(a.name,b.name));
+  const counts = new Map();
+  for (const item of ordered) {
+    const letter = alphaLetterFor(item);
+    counts.set(letter, (counts.get(letter) || 0) + 1);
+  }
+  const letters = ['#', ...CATALOG_ALPHABET];
+  host.innerHTML = letters.map(letter => {
+    const count = counts.get(letter) || 0;
+    return `<button class="alphabet-btn ${count ? '' : 'disabled'}" data-alpha="${letter}" ${count ? '' : 'disabled'} title="${count ? `${count} título(s) em ${letter}` : `Nenhum título em ${letter}`}"><span>${letter}</span><small>${count || ''}</small></button>`;
+  }).join('');
+}
+function renderAlphabeticalCards(items) {
+  if (state.sort !== 'name') return items.map(itemCard).join('');
+  let previous = '';
+  return items.map(item => {
+    const letter = alphaLetterFor(item);
+    const heading = letter !== previous
+      ? `<div class="alphabet-section" data-alpha-section="${letter}" id="catalog-letter-${alphaSectionKey(letter)}"><strong>${letter}</strong></div>`
+      : '';
+    previous = letter;
+    return heading + itemCard(item);
+  }).join('');
+}
+function jumpToCatalogLetter(letter) {
+  const targetLetter = String(letter || '').toUpperCase();
+  if (!targetLetter) return;
+  state.sort = 'name';
+  if ($('#sortSelect')) $('#sortSelect').value = 'name';
+
+  const ordered = filtered();
+  const index = ordered.findIndex(item => alphaLetterFor(item) === targetLetter);
+  if (index < 0) return;
+  state.renderLimit = Math.max(state.renderLimit, index + (performanceProfile().mobile ? 18 : 30));
+  render();
+  requestAnimationFrame(() => {
+    const section = document.querySelector(`[data-alpha-section="${CSS.escape(targetLetter)}"]`);
+    section?.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
+}
+
 function itemCard(item) {
   const type = extType(item), pct = percentFor(item), thumb = thumbUrl(item);
   const status = pct >= 100 ? 'concluído' : pct ? `${Math.round(pct)}% lido` : 'não iniciado';
@@ -1178,12 +1232,13 @@ function render() {
   const group = state.collection ? collectionGroups(currentPool()).find(g => g.key === state.collection) : null;
   $('#collectionBar').classList.toggle('hidden', !group);
   if (group) { $('#collectionTitle').textContent = group.label; $('#collectionMeta').textContent = `${group.items.length} arquivos`; }
-  if (state.filter === 'collections' && !state.collection) return renderCollections();
-  if (state.filter === 'bookmarks' && !state.collection) return renderBookmarksLibrary();
+  if (state.filter === 'collections' && !state.collection) { $('#alphabetIndex')?.classList.add('hidden'); return renderCollections(); }
+  if (state.filter === 'bookmarks' && !state.collection) { $('#alphabetIndex')?.classList.add('hidden'); return renderBookmarksLibrary(); }
   const arr = filtered();
+  renderAlphabetIndex(arr);
   $('#emptyState').classList.toggle('hidden', arr.length > 0);
   const visible = arr.slice(0, state.renderLimit);
-  $('#libraryGrid').innerHTML = visible.map(itemCard).join('');
+  $('#libraryGrid').innerHTML = renderAlphabeticalCards(visible);
   const more = $('#loadMoreBtn');
   if (more) {
     const left = Math.max(0, arr.length - visible.length);
@@ -1336,6 +1391,7 @@ async function openItem(item, forceLarge = false) {
   state.zoom = 1;
   $('#reader')?.classList.toggle('trim-margins', state.trimMargins);
   $('#reader').classList.remove('hidden'); $('#reader').setAttribute('aria-hidden', 'false');
+  $('#reader')?.classList.toggle('mobile-fullbleed', performanceProfile().mobile);
   document.body.style.overflow = 'hidden';
   state.readerViewportW = Math.round($('#readerBody')?.clientWidth || innerWidth);
   state.readerViewportH = Math.round($('#readerBody')?.clientHeight || innerHeight);
@@ -1479,6 +1535,7 @@ async function openPdf(item, token) {
     state.page = Math.max(0, Math.min(state.page, state.pages.length - 1));
     $('#pageRange').max = state.pages.length;
     $('#readerLoading').classList.add('hidden');
+    $('#readerMeta').textContent = `${state.pages.length} páginas • PDF`;
     updateReaderPrefsUI();
     await renderReaderPages();
   } catch (err) {
@@ -1818,15 +1875,16 @@ async function renderPdfInto(container, index, token, vertical = false) {
   if (state.pages[index]) { state.pages[index].width = base.width; state.pages[index].height = base.height; }
   const root = $('#readerBody');
   const spread = !vertical && effectiveMode() === 'spread';
+  const profile = performanceProfile();
   const baseWidth = vertical ? Math.min(root.clientWidth, state.mode === 'webtoon' ? 820 : 1100) : root.clientWidth;
-  const availableWidth = Math.max(spread ? 180 : 280, (baseWidth - (vertical ? 8 : 28)) / (spread ? 2 : 1));
-  const availableHeight = Math.max(280, root.clientHeight - 24);
+  const chromeGap = profile.mobile ? 2 : 28;
+  const availableWidth = Math.max(spread ? 150 : 240, (baseWidth - (vertical ? 4 : chromeGap)) / (spread ? 2 : 1));
+  const availableHeight = Math.max(240, root.clientHeight - (profile.mobile ? 2 : 24));
   let scale = availableWidth / base.width;
   if (!vertical && state.fit === 'contain') scale = Math.min(scale, availableHeight / base.height);
   if (!vertical && state.fit === 'height') scale = availableHeight / base.height;
   scale = Math.max(.25, Math.min(4, scale * (vertical ? 1 : state.zoom)));
   const viewport = page.getViewport({ scale });
-  const profile = performanceProfile();
   let dpr = Math.min(profile.pdfDpr, window.devicePixelRatio || 1);
   const estimatedPixels = viewport.width * viewport.height * dpr * dpr;
   if (estimatedPixels > profile.pdfPixelBudget) dpr *= Math.sqrt(profile.pdfPixelBudget / estimatedPixels);
@@ -2264,6 +2322,7 @@ async function setPage(n) {
     resetPrefetchQueue();
     await renderReaderPages();
     resetPagedScrollPosition();
+    if (performanceProfile().mobile) { clearTimeout(readerControlsTimer); readerControlsTimer = setTimeout(closeReaderControls, 2200); }
     if (requestId === state.pageSetSeq) state.flipDirection = '';
   } finally {
     state.pageTransitioning = false;
@@ -2299,7 +2358,7 @@ async function closeReader(fromHistory = false) {
   if (isVerticalMode()) { updateVerticalPosition(); updateProgress(); }
   state.openToken++;
   await cleanupReaderData();
-  $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true');
+  $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true'); $('#reader')?.classList.remove('mobile-fullbleed');
   document.body.style.overflow = ''; state.current = null; state.verticalRestore = null; $('#readerBody').innerHTML = ''; render();
 
   if (shouldGoBack) {
@@ -2419,6 +2478,7 @@ $('#showReadingBtn').addEventListener('click', () => { state.collection = ''; st
 $('#backCollectionsBtn').addEventListener('click', () => { state.collection = ''; state.filter = 'collections'; $$('.nav').forEach(n => n.classList.toggle('active', n.dataset.filter === 'collections')); render(); });
 $('#sourceSelect')?.addEventListener('change', e => { state.source = e.target.value || 'all'; resetRenderLimit(); $('.toolbar')?.classList.remove('mobile-filters-open'); $('#mobileFilterBtn')?.setAttribute('aria-expanded','false'); if ($('#mobileFilterBtn')) $('#mobileFilterBtn').textContent='☰'; render(); });
 $('#clearCategoryBtn')?.addEventListener('click', () => { state.category = ''; resetRenderLimit(); render(); });
+$('#alphabetIndex')?.addEventListener('click', e => { const btn=e.target.closest('[data-alpha]'); if (btn && !btn.disabled) jumpToCatalogLetter(btn.dataset.alpha); });
 $('#carouselPrevBtn')?.addEventListener('click', () => scrollFeatured(-1));
 $('#carouselNextBtn')?.addEventListener('click', () => scrollFeatured(1));
 $('#refreshBtn').addEventListener('click', loadLibrary);
