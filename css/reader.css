@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.6 */
+/* Manga-HQ-hub reader styles — v0.3.7 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -846,4 +846,46 @@
   .reader.mobile-fullbleed .reader-footer .page-jump input{display:none}
   .reader.mobile-fullbleed .reader-footer{gap:4px!important}
   .reader.mobile-fullbleed .reader-footer button{width:40px!important;height:40px!important;min-width:40px!important}
+}
+
+
+/* Manga-HQ-hub v0.3.7 — chrome automático */
+@media(max-width:850px){
+  .reader.mobile-fullbleed .reader-topbar,
+  .reader.mobile-fullbleed .reader-footer{
+    transition:
+      opacity .2s ease,
+      transform .24s cubic-bezier(.2,.72,.22,1),
+      visibility .2s ease;
+  }
+  .reader.mobile-fullbleed.reader-chrome-hidden .reader-topbar{
+    opacity:0!important;
+    transform:translateY(-115%)!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+  }
+  .reader.mobile-fullbleed.reader-chrome-hidden .reader-footer:not(.hidden){
+    opacity:0!important;
+    transform:translateY(135%)!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+  }
+  .reader.mobile-fullbleed.controls-open .reader-topbar,
+  .reader.mobile-fullbleed.controls-open .reader-footer:not(.hidden){
+    opacity:1!important;
+    transform:none!important;
+    visibility:visible!important;
+  }
+  .reader.mobile-fullbleed.reader-chrome-hidden .reader-body{
+    cursor:none;
+  }
+  .reader.mobile-fullbleed:not(.reader-chrome-hidden) .reader-body{
+    cursor:auto;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .reader.mobile-fullbleed .reader-topbar,
+  .reader.mobile-fullbleed .reader-footer{
+    transition:none!important;
+  }
 }
