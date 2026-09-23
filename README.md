@@ -1,44 +1,36 @@
-# Manga-HQ-hub v0.3.16
+# Manga-HQ-hub v0.3.17
 
 Leitor/PWA de mangás e HQs otimizado para celular.
 
-## v0.3.16 — botão Sair e fechamento confiável
+## v0.3.17 — troca rápida e limpeza segura
 
-### Botão Sair
+### PDF/HQ sem conflito ao sair e reabrir
 
-- A seta de retorno do leitor foi substituída por um botão textual **Sair**.
-- O botão possui área de toque maior no celular.
-- O listener agora chama `closeReader(false)` explicitamente.
-- O evento de clique não é mais passado por engano como parâmetro de histórico.
+A limpeza do leitor agora desanexa o documento antigo **antes** de aguardar o encerramento assíncrono do PDF.js.
 
-### Saída imediata
+Isso evita uma condição de corrida em que:
+1. o usuário tocava em **Sair**;
+2. abria outra HQ rapidamente;
+3. a limpeza atrasada do PDF anterior podia limpar estado pertencente ao novo documento.
 
-Ao tocar em **Sair**:
-1. o leitor some da tela imediatamente;
-2. o scroll da biblioteca é liberado;
-3. o progresso é salvo;
-4. a entrada artificial do histórico é consumida;
-5. PDF.js, canvases, workers, blobs e caches do documento são limpos em segundo plano.
+Todos os recursos do leitor anterior — tarefas de render, páginas verticais, blobs, cache de páginas e referência do PDF — são desconectados de forma síncrona. O `destroy()` do PDF antigo acontece somente depois que o estado já está seguro.
 
-Isso evita a sensação de botão travado em PDFs grandes.
+### Progresso ao trocar de edição
 
-### Botão Voltar do Android/navegador
+Ao abrir outra HQ diretamente, inclusive pelo botão de próxima edição:
+- a página/posição atual é atualizada;
+- o progresso pendente é gravado imediatamente;
+- só depois a limpeza do leitor anterior começa.
 
-O histórico continua funcionando:
-- ao abrir uma HQ, o leitor cria uma entrada própria;
-- o botão Voltar fecha o leitor;
-- a saída pelo botão **Sair** remove essa entrada sem sair do site.
+Isso evita perder os últimos segundos de leitura quando havia uma gravação temporizada pendente.
 
-### Recursos preservados
+### Limpeza adicional
 
-- PDF, WebP, CBR, CBZ e RAR;
-- Página única, Flipbook, Vertical e Webtoon;
-- qualidade PDF adaptativa;
-- zoom móvel;
-- filtro de baixa resolução;
-- prefetch cancelável;
-- deduplicação de páginas;
-- Acervo 1, Acervo 2 e Acervo Marvel.
+- removido listener duplicado do drawer de miniaturas;
+- preservado o botão textual **Sair** da v0.3.16;
+- preservado fechamento imediato antes da limpeza pesada;
+- mantidos PDF, WebP, CBR, CBZ, RAR, Página, Flipbook, Vertical e Webtoon;
+- mantidos Acervo 1, Acervo 2 e Acervo Marvel.
 
 ## Validação
 
