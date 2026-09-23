@@ -2696,7 +2696,8 @@ function trimPageCache(center) {
 }
 
 function wirePagedImageErrors(indexes, expectedToken = state.renderToken, scope = $('#readerBody')) {
-  $('.page-stage img', scope || document).forEach((img, n) => {
+  const images = scope?.matches?.('.page-stage') ? $$('img', scope) : $$('.page-stage img', scope || document);
+  images.forEach((img, n) => {
     img.decoding = 'async';
     img.addEventListener('load', () => {
       const index = indexes[n] ?? state.page;
@@ -2806,7 +2807,7 @@ async function renderReaderPages() {
       if (visibleImages.length) {
         await Promise.race([
           Promise.allSettled(visibleImages.map(img => typeof img.decode === 'function' ? img.decode() : Promise.resolve())),
-          new Promise(resolve => setTimeout(resolve, profile.mobile ? 120 : 200))
+          new Promise(resolve => setTimeout(resolve, canStage ? (profile.mobile ? 1200 : 1500) : (profile.mobile ? 120 : 200)))
         ]);
       }
       if (token !== state.renderToken) return;
