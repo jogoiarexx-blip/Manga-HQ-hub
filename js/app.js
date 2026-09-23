@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.12',
+  appVersion: '0.3.13',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -37,6 +37,18 @@ const RUNTIME_URLS = {
   unrar: 'https://esm.sh/node-unrar-js@2.0.2?bundle',
   unrarWasm: 'https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.2/esm/js/unrar.wasm'
 };
+const RUNTIME_FALLBACK_URLS = {
+  pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/build/pdf.mjs',
+  zip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm',
+  unrar: 'https://cdn.jsdelivr.net/npm/node-unrar-js@2.0.2/+esm'
+};
+async function importRuntime(primary, fallback) {
+  try { return await import(primary); }
+  catch (firstError) {
+    if (!fallback || fallback === primary) throw firstError;
+    return import(fallback);
+  }
+}
 let offlineWebpModulePromise = null;
 function loadOfflineWebpModule() {
   if (!offlineWebpModulePromise) offlineWebpModulePromise = import('./modules/offline-webp.js');
@@ -56,15 +68,22 @@ function setNetworkStatus() {
 }
 async function warmReaderRuntimes() {
   const el = $('#runtimeStatus');
-  if (!navigator.onLine) { if (el) { el.textContent = 'Offline: usando motores já armazenados no cache, quando disponíveis.'; el.className = 'runtime-status warn'; } return; }
-  if (el) { el.textContent = 'Preparando motores de PDF/CBR/CBZ para uso offline…'; el.className = 'runtime-status'; }
-  const urls = Object.values(RUNTIME_URLS);
-  const results = await Promise.allSettled(urls.map(url => fetch(url, { mode:'cors', cache:'reload' }).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return true; })));
-  const ok = results.filter(r => r.status === 'fulfilled').length;
-  if (el) {
-    if (ok === urls.length) { el.textContent = 'Motores de PDF/CBR/CBZ armazenados para reutilização offline.'; el.className = 'runtime-status ok'; }
-    else { el.textContent = `Motores offline parcialmente preparados (${ok}/${urls.length}). O app tentará novamente quando houver internet.`; el.className = 'runtime-status warn'; }
+  const urls = [RUNTIME_URLS.pdf, RUNTIME_URLS.pdfWorker, RUNTIME_URLS.zip, RUNTIME_URLS.unrar, RUNTIME_URLS.unrarWasm];
+  let cached = 0;
+  if ('caches' in globalThis) {
+    const hits = await Promise.allSettled(urls.map(url => caches.match(url)));
+    cached = hits.filter(result => result.status === 'fulfilled' && result.value).length;
   }
+  if (!el) return;
+  if (!navigator.onLine) {
+    el.textContent = cached ? `Offline: ${cached}/${urls.length} motores já disponíveis em cache.` : 'Offline: os motores serão usados se já estiverem no cache do navegador.';
+    el.className = cached ? 'runtime-status ok' : 'runtime-status warn';
+    return;
+  }
+  el.textContent = cached
+    ? `Motores sob demanda • ${cached}/${urls.length} já em cache. O restante carrega somente quando necessário.`
+    : 'Motores sob demanda • PDF/CBR/CBZ carregam somente quando você abrir esse formato.';
+  el.className = cached ? 'runtime-status ok' : 'runtime-status';
 }
 
 const storageGet = key => { try { return localStorage.getItem(key); } catch { return null; } };
@@ -80,7 +99,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: ''
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -399,7 +418,16 @@ function schedulePdfNeighborWarmup() {
   else setTimeout(() => run(), 120);
 }
 
-function applyDisplayPrefs() {
+function scheduleReaderVisualRefresh() {
+  if (state.displayRefreshRaf) return;
+  state.displayRefreshRaf = requestAnimationFrame(() => {
+    state.displayRefreshRaf = 0;
+    refreshLowResFilters();
+    refreshMobileReadingScale();
+    refreshPdfQualityUi();
+  });
+}
+function applyDisplayPrefs(refreshPages = true) {
   const reader = $('#reader'); if (!reader) return;
   reader.style.setProperty('--reader-brightness', `${Number(displayPrefs.brightness || 100)}%`);
   reader.style.setProperty('--reader-contrast', `${Number(displayPrefs.contrast || 100)}%`);
@@ -414,12 +442,11 @@ function applyDisplayPrefs() {
   if ($('#brightnessValue')) $('#brightnessValue').textContent = `${displayPrefs.brightness || 100}%`;
   if ($('#contrastValue')) $('#contrastValue').textContent = `${displayPrefs.contrast || 100}%`;
   if ($('#sepiaValue')) $('#sepiaValue').textContent = `${displayPrefs.sepia || 0}%`;
-  refreshLowResFilters();
-  refreshMobileReadingScale();
-  refreshPdfQualityUi();
+  if (refreshPages) scheduleReaderVisualRefresh();
+  else refreshPdfQualityUi();
 }
 function setDisplayPref(name, value) {
-  displayPrefs[name] = Number(value); saveDisplayPrefs(); applyDisplayPrefs();
+  displayPrefs[name] = Number(value); saveDisplayPrefs(); applyDisplayPrefs(false);
 }
 function setLowResMode(value) {
   displayPrefs.lowRes = ['off','auto','strong'].includes(String(value)) ? String(value) : 'auto';
@@ -440,22 +467,25 @@ function performanceProfile() {
   const smallMobile = mobile && matchMedia('(max-width: 430px)').matches;
   const memory = Number(navigator.deviceMemory || 0);
   const cores = Number(navigator.hardwareConcurrency || 0);
-  const constrained = (memory && memory <= 4) || (cores && cores <= 4);
+  const heap = globalThis.performance?.memory;
+  const heapRatio = heap?.jsHeapSizeLimit ? Number(heap.usedJSHeapSize || 0) / Number(heap.jsHeapSizeLimit || 1) : 0;
+  const memoryPressure = heapRatio >= .72;
+  const constrained = (memory && memory <= 4) || (cores && cores <= 4) || memoryPressure;
   const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
   const saveData = Boolean(connection?.saveData);
   const slowConnection = saveData || ['slow-2g','2g'].includes(String(connection?.effectiveType || ''));
   const eco = mode === 'eco' || (mode === 'auto' && mobile && constrained);
   const quality = mode === 'quality';
   const hugeComic = Boolean(state.current && extType(state.current)==='comic' && Number(state.current.size||0) > 180*1024*1024);
-  const effectiveEco = eco || hugeComic;
+  const effectiveEco = eco || hugeComic || memoryPressure;
   return {
-    mode, mobile, smallMobile, constrained, saveData, slowConnection, eco: effectiveEco, quality,
-    cacheLimit: effectiveEco ? 4 : (smallMobile && !quality ? 5 : (mobile && !quality ? 7 : Math.max(8, Number(CONFIG.pageCacheLimit || 12)))),
+    mode, mobile, smallMobile, constrained, saveData, slowConnection, eco: effectiveEco, quality, memoryPressure, heapRatio,
+    cacheLimit: memoryPressure ? 3 : (effectiveEco ? 4 : (smallMobile && !quality ? 5 : (mobile && !quality ? 7 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))))),
     pdfDpr: effectiveEco ? 1 : (smallMobile && !quality ? 1.1 : (mobile && !quality ? 1.3 : 2)),
     pdfPixelBudget: effectiveEco ? 3200000 : (smallMobile && !quality ? 4200000 : (mobile && !quality ? 5500000 : 12000000)),
     verticalWindow: effectiveEco ? 1 : (smallMobile && !quality ? 1 : (mobile && !quality ? 2 : 5)),
     observerMargin: effectiveEco ? 320 : (smallMobile && !quality ? 440 : (mobile && !quality ? 620 : 1200)),
-    prefetch: !effectiveEco && !slowConnection && document.visibilityState !== 'hidden',
+    prefetch: !effectiveEco && !memoryPressure && !slowConnection && document.visibilityState !== 'hidden',
     prefetchBothDirections: !mobile && !slowConnection
   };
 }
@@ -1724,9 +1754,12 @@ async function openItem(item, forceLarge = false) {
 
 async function loadPdfJs() {
   if (!pdfjsModulePromise) {
-    pdfjsModulePromise = import(RUNTIME_URLS.pdf).then(pdfjs => {
+    pdfjsModulePromise = importRuntime(RUNTIME_URLS.pdf, RUNTIME_FALLBACK_URLS.pdf).then(pdfjs => {
       pdfjs.GlobalWorkerOptions.workerSrc = RUNTIME_URLS.pdfWorker;
       return pdfjs;
+    }).catch(error => {
+      pdfjsModulePromise = null;
+      throw error;
     });
   }
   return pdfjsModulePromise;
@@ -1824,10 +1857,10 @@ async function openPdf(item, token) {
     if (token !== state.openToken) return;
     const pdfPerf = performanceProfile();
     const options = {
-      disableAutoFetch: Boolean(pdfPerf.mobile || pdfPerf.slowConnection || pdfPerf.saveData),
+      disableAutoFetch: Boolean(pdfPerf.eco || pdfPerf.slowConnection || pdfPerf.saveData || pdfPerf.memoryPressure),
       disableStream: false,
       disableRange: false,
-      rangeChunkSize: pdfPerf.mobile ? 262144 : 524288
+      rangeChunkSize: pdfPerf.slowConnection || pdfPerf.saveData ? 262144 : (pdfPerf.mobile ? 524288 : 1048576)
     };
     if (item.localFile) {
       options.data = await item.localFile.arrayBuffer();
@@ -1947,12 +1980,23 @@ async function downloadDriveFile(item, token, purpose = 'reader') {
 }
 
 async function loadJsZip() {
-  if (!jszipModulePromise) jszipModulePromise = import(RUNTIME_URLS.zip).then(m => m.default || m);
+  if (!jszipModulePromise) {
+    jszipModulePromise = importRuntime(RUNTIME_URLS.zip, RUNTIME_FALLBACK_URLS.zip)
+      .then(m => m.default || m)
+      .catch(error => { jszipModulePromise = null; throw error; });
+  }
   return jszipModulePromise;
 }
 async function loadUnrar() {
-  if (!unrarModulePromise) unrarModulePromise = import(RUNTIME_URLS.unrar);
-  if (!unrarWasmPromise) unrarWasmPromise = fetch(RUNTIME_URLS.unrarWasm).then(r => { if (!r.ok) throw new Error(`unrar.wasm HTTP ${r.status}`); return r.arrayBuffer(); });
+  if (!unrarModulePromise) {
+    unrarModulePromise = importRuntime(RUNTIME_URLS.unrar, RUNTIME_FALLBACK_URLS.unrar)
+      .catch(error => { unrarModulePromise = null; throw error; });
+  }
+  if (!unrarWasmPromise) {
+    unrarWasmPromise = fetch(RUNTIME_URLS.unrarWasm, { cache:'force-cache' })
+      .then(r => { if (!r.ok) throw new Error(`unrar.wasm HTTP ${r.status}`); return r.arrayBuffer(); })
+      .catch(error => { unrarWasmPromise = null; throw error; });
+  }
   return Promise.all([unrarModulePromise, unrarWasmPromise]);
 }
 
@@ -1971,7 +2015,7 @@ function archiveKindFromName(name) {
 async function prepareZipArchive(data, token) {
   const JSZip = await loadJsZip();
   if (token !== state.openToken) return null;
-  const zip = await JSZip.loadAsync(data, { checkCRC32: false });
+  const zip = await JSZip.loadAsync(data, { checkCRC32:false, createFolders:false });
   if (token !== state.openToken) return null;
   const entries = Object.values(zip.files)
     .filter(f => !f.dir && isImage(f.name))
@@ -2250,7 +2294,7 @@ async function renderPdfInto(container, index, token, vertical = false) {
   if (token !== state.renderToken || !container?.isConnected) return;
   container.innerHTML = ''; container.appendChild(canvas);
   applyLowResFilterToElement(canvas, index, canvas.width, canvas.height);
-  refreshLowResFilters();
+  scheduleReaderVisualRefresh();
   if (vertical) { container.style.aspectRatio = `${base.width}/${base.height}`; container.style.minHeight='0'; applyMobileReadingScaleToSlot(container,index,base.width,base.height); if (index === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); }
 }
 
@@ -2463,7 +2507,7 @@ function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
       applyLowResFilterToElement(img, index, img.naturalWidth, img.naturalHeight);
       applyMobileReadingScaleToImage(img, index, img.naturalWidth, img.naturalHeight);
       applyImageZoomWithoutRender(state.zoom);
-      refreshLowResFilters();
+      scheduleReaderVisualRefresh();
       refreshMobileReadingScale();
     }, { once:true });
     img.addEventListener('error', () => {
@@ -2542,7 +2586,7 @@ async function renderReaderPages() {
       if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
     }
   }
-  updateProgress(); updatePageControls(); refreshLowResFilters(); refreshMobileReadingScale();
+  updateProgress(); updatePageControls(); scheduleReaderVisualRefresh();
 }
 
 function setupVerticalObserver() {
@@ -2573,7 +2617,7 @@ async function loadVerticalSlot(slot) {
     const url = await getPageUrl(i);
     if (!slot.isConnected) return;
     const img = new Image(); img.alt = `Página ${i + 1}`; img.loading = 'lazy'; img.decoding = 'async'; img.fetchPriority = 'low'; img.src = url;
-    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; slot.style.minHeight = '0'; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); const scale=applyMobileReadingScaleToSlot(slot, i, img.naturalWidth, img.naturalHeight); img.dataset.mobileBaseScale=String(scale); img.classList.toggle('mobile-reading-enlarged',scale>1.01); refreshLowResFilters(); refreshMobileReadingScale(); if (i === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); };
+    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; slot.style.minHeight = '0'; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); const scale=applyMobileReadingScaleToSlot(slot, i, img.naturalWidth, img.naturalHeight); img.dataset.mobileBaseScale=String(scale); img.classList.toggle('mobile-reading-enlarged',scale>1.01); scheduleReaderVisualRefresh(); if (i === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); };
     img.onerror = () => {
       const entry = state.archive?.entries?.[i];
       if (state.archive?.type === 'drive-pages' && entry?.id) {
@@ -2754,7 +2798,7 @@ async function cleanupReaderData() {
   state.readerDownloadController?.abort();
   state.readerDownloadController = null;
   stopVerticalObserver();
-  state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0;
+  state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0; cancelAnimationFrame(state.displayRefreshRaf || 0); state.displayRefreshRaf = 0;
   resetPrefetchQueue(); state.prefetchActive = 0; clearTimeout(state.verticalSaveTimer); state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
@@ -3410,7 +3454,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.12', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.13', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -3484,13 +3528,14 @@ if (storageGet(LS.theme) === 'light') document.documentElement.classList.add('li
 setNetworkStatus();
 applyDisplayPrefs();
 setupCatalogAutoLoad();
-window.addEventListener('online', () => { setNetworkStatus();
-applyDisplayPrefs(); warmReaderRuntimes().catch(() => {}); });
-window.addEventListener('offline', setNetworkStatus);
+window.addEventListener('online', () => { setNetworkStatus(); applyDisplayPrefs(false); warmReaderRuntimes().catch(() => {}); });
+window.addEventListener('offline', () => { setNetworkStatus(); warmReaderRuntimes().catch(() => {}); });
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').then(async reg => {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
     reg.update().catch(() => {});
-    try { await navigator.serviceWorker.ready; await new Promise(r => setTimeout(r, 250)); await warmReaderRuntimes(); } catch {}
+    const inspect = () => warmReaderRuntimes().catch(() => {});
+    if ('requestIdleCallback' in window) requestIdleCallback(inspect, { timeout:1500 });
+    else setTimeout(inspect, 700);
   }).catch(() => { warmReaderRuntimes().catch(() => {}); });
 } else warmReaderRuntimes().catch(() => {});
 (async () => { await refreshOfflineIndex(); await updateOfflineStorageInfo(); await loadLibrary(); })();
