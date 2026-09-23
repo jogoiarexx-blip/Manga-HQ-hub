@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.19';
+const VERSION = '0.3.20';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.19'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.20'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -164,6 +164,16 @@ assert(app.includes('function renderRecentArrivals'), 'recent additions renderin
 assert(index.includes('randomReadBtn'), 'random reading shortcut exists');
 assert(app.includes('function openRandomLibraryItem'), 'random reading action exists');
 assert(index.includes('exploreLibraryBtn'), 'explore catalog hero action exists');
+assert(index.includes('id="libraryStickyHead"'), 'sticky library header wrapper exists');
+assert(css.includes('.library-sticky-head{'), 'sticky library header CSS exists');
+assert(css.includes('top:var(--library-sticky-top)'), 'sticky header follows topbar offset');
+assert(css.includes('.mobile-filter-btn{display:none}'), 'mobile filter button is desktop-hidden');
+assert(css.includes('.toolbar.mobile-filters-open #sourceSelect'), 'mobile filters expand on demand');
+assert(app.includes('function updateLibraryStickyMetrics'), 'sticky header metrics are measured');
+assert(app.includes('function libraryStickyScrollOffset'), 'alphabet jumps account for sticky header');
+const alphaRevealBlock = app.slice(app.indexOf('function setActiveAlphabetLetter'), app.indexOf('let alphabetScrollRaf', app.indexOf('function setActiveAlphabetLetter')));
+assert(!alphaRevealBlock.includes('scrollIntoView'), 'alphabet reveal only scrolls horizontally');
+assert(alphaRevealBlock.includes('host.scrollTo'), 'alphabet reveal centers button horizontally');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
