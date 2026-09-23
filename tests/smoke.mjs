@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.14';
+const VERSION = '0.3.15';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -106,6 +106,14 @@ assert(app.includes("cache:'default'"), 'page manifests use browser cache');
 assert(app.includes('const canStage = Boolean(oldStages.length'), 'image staging swap exists');
 assert(app.includes("stage.style.visibility = 'hidden'"), 'staged images stay hidden until ready');
 assert(app.includes("const images = scope?.matches?.('.page-stage') ? $('img', scope) : $('.page-stage img', scope || document);"), 'staged image wiring uses querySelectorAll helper');
+assert(app.includes('progressSaveTimer: 0'), 'progress write batching state exists');
+assert(app.includes('function flushProgressSave'), 'progress flush helper exists');
+assert(app.includes('function progressBucket'), 'progress bucket optimization exists');
+assert(app.includes('document.elementFromPoint'), 'vertical current page uses viewport probe');
+assert(app.includes('verticalLoaded: new Set()'), 'active vertical slot registry exists');
+assert(app.includes('for (const i of [...state.verticalLoaded])'), 'vertical cleanup only scans active slots');
+assert(app.includes('nextIssueCacheFor'), 'next issue lookup is cached');
+assert(readerCss.includes('content-visibility:auto'), 'vertical content visibility optimization exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
