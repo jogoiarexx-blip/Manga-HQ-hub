@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.16';
+const VERSION = '0.3.17';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("for (const slot of $$('.page-slot'))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.16'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.17'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -108,6 +108,12 @@ assert(app.includes("stage.style.visibility = 'hidden'"), 'staged images stay hi
 assert(app.includes("const images = scope?.matches?.('.page-stage') ? $$('img', scope) : $$('.page-stage img', scope || document);"), 'staged image wiring uses querySelectorAll helper');
 assert(app.includes('progressSaveTimer: 0'), 'progress write batching state exists');
 assert(app.includes('function flushProgressSave'), 'progress flush helper exists');
+const openItemBlock = app.slice(app.indexOf('async function openItem('), app.indexOf('async function loadPdfJs', app.indexOf('async function openItem(')));
+assert(openItemBlock.indexOf('flushProgressSave();') >= 0 && openItemBlock.indexOf('flushProgressSave();') < openItemBlock.indexOf('await cleanupReaderData();'), 'progress flushes before reader cleanup when switching items');
+const cleanupReaderBlock = app.slice(app.indexOf('async function cleanupReaderData('), app.indexOf('async function closeReader(', app.indexOf('async function cleanupReaderData(')));
+assert(cleanupReaderBlock.includes('const pdfDoc = state.pdfDoc;'), 'cleanup captures the old PDF document');
+assert(cleanupReaderBlock.indexOf('state.pdfDoc = null;') >= 0 && cleanupReaderBlock.indexOf('state.pdfDoc = null;') < cleanupReaderBlock.indexOf('await pdfDoc.destroy()'), 'old PDF is detached before asynchronous destroy');
+assert(cleanupReaderBlock.indexOf('state.verticalLoaded.clear();') >= 0 && cleanupReaderBlock.indexOf('state.verticalLoaded.clear();') < cleanupReaderBlock.indexOf('await pdfDoc.destroy()'), 'reader state is cleared before asynchronous PDF destroy');
 assert(app.includes('function progressBucket'), 'progress bucket optimization exists');
 assert(app.includes('document.elementFromPoint'), 'vertical current page uses viewport probe');
 assert(app.includes('verticalLoaded: new Set()'), 'active vertical slot registry exists');
