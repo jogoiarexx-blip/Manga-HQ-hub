@@ -1,6 +1,15 @@
-# Manga-HQ-hub v0.3.22
+# Manga-HQ-hub v0.3.23
 
 Leitor/PWA de mangás e HQs com foco em navegação rápida no celular.
+
+## v0.3.23 — leitor vertical mobile resiliente
+
+- Leitura vertical contínua passa a ser o padrão para HQs sem preferência salva no celular.
+- Mantém a página atual e páginas próximas vivas para permitir voltar sem encontrar espaços vazios.
+- Recupera automaticamente páginas descarregadas que continuam visíveis ou próximas do viewport.
+- Evita limpar canvas/imagens que ainda estão na região de leitura.
+- PDFs usam primeira renderização leve no celular e refinam a página em foco depois.
+- Corrige a recursão incorreta de `pdfRenderCapsForPass()` e ativa de fato o fast pass de PDF.
 
 ## v0.3.22 — Acervo Raro
 
