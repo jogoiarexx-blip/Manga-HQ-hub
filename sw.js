@@ -1,4 +1,4 @@
-const APP_VERSION = '0.3.21';
+const APP_VERSION = '0.3.22';
 const CACHE_PREFIX = 'manga-hq-hub-ghpages-';
 const LEGACY_CACHE_PREFIXES = ['manga-hq-reader-ghpages-'];
 const CACHE = `${CACHE_PREFIX}v${APP_VERSION}`;
@@ -128,6 +128,9 @@ const RAW_GITHUB_ORIGIN = 'https://raw.githubusercontent.com';
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
+
+  // PDF.js controla os downloads; evitar copiar edições inteiras para o cache do PWA.
+  if (/\.pdf$/i.test(url.pathname)) return;
 
   if (RUNTIME_CDN_ORIGINS.has(url.origin)) {
     event.respondWith(staleWhileRevalidate(event.request));

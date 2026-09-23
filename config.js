@@ -1,6 +1,6 @@
 // Manga-HQ-hub — acervo WebP conectado ao Hub.
 window.MHQR_CONFIG = {
-  appVersion: '0.3.21',
+  appVersion: '0.3.22',
   folderIds: [],
   folderUrls: [],
   folderId: '',

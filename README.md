@@ -1,6 +1,12 @@
-# Manga-HQ-hub v0.3.21
+# Manga-HQ-hub v0.3.22
 
 Leitor/PWA de mangás e HQs com foco em navegação rápida no celular.
+
+## v0.3.22 — Acervo Raro
+
+- Inclui as 16 edições do Acervo Raro, organizadas em quatro histórias.
+- Exibe as capas WebP e abre os PDFs no leitor existente.
+- Deixa downloads de PDF fora do cache automático do PWA.
 
 ## v0.3.21 — revisão visual mobile
 

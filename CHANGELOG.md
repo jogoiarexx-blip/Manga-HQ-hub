@@ -1,5 +1,11 @@
 # Changelog — Manga-HQ-hub
 
+## 0.3.22 — Acervo Raro
+
+- Conecta o novo catálogo de 16 PDFs e capas WebP.
+- Evita armazenar PDFs inteiros no cache automático do PWA.
+- Atualiza a versão do aplicativo para carregar a nova configuração.
+
 ## 0.3.21 — revisão mobile
 
 - Move o sticky da biblioteca para antes dos carrosséis de descoberta.
