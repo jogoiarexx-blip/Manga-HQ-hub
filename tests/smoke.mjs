@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.23';
+const VERSION = '0.3.24';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -88,6 +88,9 @@ assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vert
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
 assert(app.includes(`appVersion: '${VERSION}'`), 'internal app fallback version is current');
+assert(index.includes('installCtaBtn'), 'prominent install CTA exists');
+assert(app.includes('function requestAppInstall'), 'install flow helper exists');
+assert(app.includes("window.addEventListener('appinstalled'"), 'installed-state handler exists');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
