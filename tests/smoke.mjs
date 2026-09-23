@@ -87,7 +87,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.22'"), 'internal app fallback version is current');
+assert(app.includes(`appVersion: '${VERSION}'`), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
