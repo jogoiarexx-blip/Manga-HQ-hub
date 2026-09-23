@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.3.18 -->
+<!-- Manga-HQ-hub deploy v0.3.19 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -11,12 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.3.18</title>
+  <title>Manga-HQ-hub v0.3.19</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.3.18" />
-  <link rel="stylesheet" href="./css/reader.css?v=0.3.18" />
+  <link rel="stylesheet" href="./css/app.css?v=0.3.19" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.3.19" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -62,6 +62,10 @@
             <h1>Mangás e HQs em um leitor só.</h1>
             <p>O Manga HQ Acervo está conectado à biblioteca. Leia as edições WebP diretamente no Hub ou abra seus próprios arquivos PDF, CBR, CBZ, RAR ou ZIP.</p>
             <div class="hero-tags"><span>PDF</span><span>CBR / CBZ / RAR / ZIP</span><span>Arquivos locais</span><span>Flipbook 2 páginas</span><span>Arraste para virar</span><span>2 páginas no celular</span><span>RTL inteligente</span><span>Progresso automático</span></div>
+            <div class="hero-actions">
+              <button id="exploreLibraryBtn" class="hero-primary">Explorar acervo <span>→</span></button>
+              <button id="randomReadBtn" class="hero-secondary">🎲 Ler algo aleatório</button>
+            </div>
           </div>
           <div class="stats">
             <div><b id="itemCount">0</b><span>arquivos</span></div>
@@ -85,13 +89,25 @@
 
         <section id="featuredSection" class="featured-section">
           <div class="section-head">
-            <div><span class="eyebrow">DESTAQUES</span><h2>Carrossel de coleções</h2></div>
+            <div><span class="eyebrow">DESTAQUES</span><h2>Coleções em destaque</h2><p class="section-subtitle">Uma vitrine visual do acervo, com progresso e novidades de cada coleção.</p></div>
             <div class="carousel-actions">
-              <button id="carouselPrevBtn" class="ghost small" aria-label="Voltar no carrossel">‹</button>
-              <button id="carouselNextBtn" class="ghost small" aria-label="Avançar no carrossel">›</button>
+              <span id="carouselPosition" class="carousel-position">1 / 1</span>
+              <button id="carouselPrevBtn" class="ghost small carousel-arrow" aria-label="Voltar no carrossel">‹</button>
+              <button id="carouselNextBtn" class="ghost small carousel-arrow" aria-label="Avançar no carrossel">›</button>
             </div>
           </div>
-          <div id="featuredCarousel" class="featured-carousel"></div>
+          <div class="featured-carousel-shell">
+            <div id="featuredCarousel" class="featured-carousel"></div>
+          </div>
+          <div id="featuredCarouselDots" class="carousel-dots" aria-label="Navegação do carrossel"></div>
+        </section>
+
+        <section id="recentSection" class="recent-section hidden">
+          <div class="section-head">
+            <div><span class="eyebrow">RECENTES</span><h2>Adicionados recentemente</h2><p class="section-subtitle">As edições que chegaram mais recentemente ao acervo.</p></div>
+            <button id="recentAllBtn" class="ghost small">Ver todos</button>
+          </div>
+          <div id="recentRail" class="recent-rail"></div>
         </section>
 
         <section id="categoriesSection" class="categories-section">
@@ -283,7 +299,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.3.18"></script>
-  <script type="module" src="./js/app.js?v=0.3.18"></script>
+  <script src="./config.js?v=0.3.19"></script>
+  <script type="module" src="./js/app.js?v=0.3.19"></script>
 </body>
 </html>
