@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("for (const slot of $$('.page-slot'))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.12'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.16'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -121,6 +121,11 @@ assert(app.includes('const triggeredByHistory = fromHistory === true'), 'close h
 assert(app.includes("reader.classList.add('hidden')"), 'reader hides before cleanup');
 assert(app.indexOf("reader.classList.add('hidden')") < app.indexOf('await cleanupReaderData();'), 'reader hides before heavy cleanup');
 assert(readerCss.includes('.reader-exit-btn'), 'reader exit button CSS exists');
+assert(index.includes('id="closeReader"'), 'reader exit button exists');
+assert(app.includes("closeReader(false).catch"), 'exit button calls normal close explicitly');
+assert(app.includes("const triggeredByHistory = fromHistory === true"), 'history close flag uses strict boolean');
+assert(app.indexOf("reader.classList.add('hidden')") < app.indexOf("await cleanupReaderData();"), 'reader hides before heavy cleanup');
+assert(readerCss.includes('.reader-exit-btn'), 'reader exit button styling exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
