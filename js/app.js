@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.18',
+  appVersion: '0.3.19',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -94,12 +94,35 @@ const readJson = (key, fallback) => {
   catch { return fallback; }
 };
 
+// A home sempre nasce no topo. O navegador não deve restaurar uma posição
+// antiga nem o índice A–Z deve puxar a página durante a montagem do catálogo.
+let bootTopLock = true;
+try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch {}
+function forceInitialHomeTop() {
+  if (!bootTopLock) return;
+  if (!$('#reader')?.classList.contains('hidden')) return;
+  try { window.scrollTo({ top:0, left:0, behavior:'auto' }); }
+  catch { window.scrollTo(0, 0); }
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+queueMicrotask(forceInitialHomeTop);
+requestAnimationFrame(forceInitialHomeTop);
+window.addEventListener('pageshow', () => {
+  forceInitialHomeTop();
+  requestAnimationFrame(forceInitialHomeTop);
+  setTimeout(() => {
+    forceInitialHomeTop();
+    bootTopLock = false;
+  }, 900);
+}, { once:true });
+
 const state = {
   items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalLoaded: new Set(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfLoadingTask: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfPageUpgradeTimer: 0, pdfMaintenanceSeq: 0, pdfPageTurns: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, readerHistoryClosing: false, readerHistoryReopenPending: false, readerHistorySettleTimer: 0, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: '', libraryRefreshTimer: 0, readerCleanupQueue: [], readerCleanupTimer: 0, readerCleanupIdle: 0, readerCleanupRunning: false
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, readerHistoryClosing: false, readerHistoryReopenPending: false, readerHistorySettleTimer: 0, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: '', libraryRefreshTimer: 0, readerCleanupQueue: [], readerCleanupTimer: 0, readerCleanupIdle: 0, readerCleanupRunning: false, featuredCarouselTimer: 0, featuredCarouselPauseUntil: 0, featuredCarouselRaf: 0, featuredCarouselIndex: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1323,7 +1346,11 @@ function categoryGroups(items = state.items) {
 function sourcePool() { return state.items.filter(item => state.source === 'all' || sourceKeyFor(item) === state.source); }
 function currentPool() { return sourcePool().filter(item => !state.category || categoryKeyFor(item) === state.category); }
 function featuredCollections(items = currentPool()) {
-  return collectionGroups(items).map(g => ({ ...g, category:categoryLabelFor(g.items[0]) })).filter(g => g.items.length).sort((a,b)=>b.items.length-a.items.length || naturalSort(a.label,b.label)).slice(0,10);
+  return collectionGroups(items)
+    .map(g => ({ ...g, category:categoryLabelFor(g.items[0]) }))
+    .filter(g => g.items.length)
+    .sort((a,b)=>b.items.length-a.items.length || naturalSort(a.label,b.label))
+    .slice(0,12);
 }
 function renderCategoryChips() {
   const chipWrap=$('#categoryChips'); if (!chipWrap) return;
@@ -1331,12 +1358,115 @@ function renderCategoryChips() {
   chipWrap.innerHTML=[`<button class="chip ${!state.category?'active':''}" data-category="">Todos <span>${base.length}</span></button>`].concat(groups.map(g=>`<button class="chip ${state.category===g.key?'active':''}" data-category="${escapeHtml(g.key)}">${escapeHtml(g.label)} <span>${g.items.length}</span></button>`)).join('');
   $('#clearCategoryBtn')?.classList.toggle('hidden',!state.category);
 }
+function featuredLeadItem(group) {
+  return group?.items?.find(item => Boolean(thumbUrl(item))) || group?.items?.[0] || null;
+}
+function updateFeaturedCarouselUi(index = state.featuredCarouselIndex) {
+  const host = $('#featuredCarousel');
+  const dots = $('#featuredCarouselDots');
+  const cards = host ? $('.featured-card', host) : [];
+  if (!cards.length) {
+    if (dots) dots.innerHTML = '';
+    if ($('#carouselPosition')) $('#carouselPosition').textContent = '0 / 0';
+    return;
+  }
+  const safe = Math.max(0, Math.min(cards.length - 1, Number(index) || 0));
+  state.featuredCarouselIndex = safe;
+  cards.forEach((card, i) => card.classList.toggle('is-active', i === safe));
+  dots?.querySelectorAll?.('[data-carousel-dot]').forEach((dot, i) => {
+    dot.classList.toggle('active', i === safe);
+    dot.setAttribute('aria-current', i === safe ? 'true' : 'false');
+  });
+  if ($('#carouselPosition')) $('#carouselPosition').textContent = `${safe + 1} / ${cards.length}`;
+}
+function pauseFeaturedCarousel(ms = 9000) {
+  state.featuredCarouselPauseUntil = Math.max(state.featuredCarouselPauseUntil, Date.now() + ms);
+  scheduleFeaturedCarouselAutoplay();
+}
+function scheduleFeaturedCarouselAutoplay() {
+  clearTimeout(state.featuredCarouselTimer);
+  state.featuredCarouselTimer = 0;
+  const host = $('#featuredCarousel');
+  const cards = host ? $('.featured-card', host) : [];
+  if (cards.length < 2 || document.visibilityState === 'hidden' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  state.featuredCarouselTimer = setTimeout(() => {
+    state.featuredCarouselTimer = 0;
+    if (Date.now() < state.featuredCarouselPauseUntil) {
+      scheduleFeaturedCarouselAutoplay();
+      return;
+    }
+    setFeaturedCarouselIndex((state.featuredCarouselIndex + 1) % cards.length, { smooth:true, user:false });
+    scheduleFeaturedCarouselAutoplay();
+  }, 6200);
+}
+function setFeaturedCarouselIndex(index, { smooth = true, user = true } = {}) {
+  const host = $('#featuredCarousel'); if (!host) return;
+  const cards = $('.featured-card', host); if (!cards.length) return;
+  const safe = ((Number(index) || 0) % cards.length + cards.length) % cards.length;
+  const card = cards[safe];
+  host.scrollTo({ left:Math.max(0, card.offsetLeft - host.offsetLeft), behavior:smooth ? 'smooth' : 'auto' });
+  updateFeaturedCarouselUi(safe);
+  if (user) pauseFeaturedCarousel();
+}
+function syncFeaturedCarouselFromScroll() {
+  state.featuredCarouselRaf = 0;
+  const host = $('#featuredCarousel'); if (!host) return;
+  const cards = $('.featured-card', host); if (!cards.length) return;
+  let best = 0, distance = Infinity;
+  for (let i = 0; i < cards.length; i++) {
+    const d = Math.abs((cards[i].offsetLeft - host.offsetLeft) - host.scrollLeft);
+    if (d < distance) { distance = d; best = i; }
+  }
+  updateFeaturedCarouselUi(best);
+}
+function setupFeaturedCarousel() {
+  const host = $('#featuredCarousel'); if (!host) return;
+  if (!host.dataset.carouselWired) {
+    host.dataset.carouselWired = '1';
+    host.addEventListener('scroll', () => {
+      if (state.featuredCarouselRaf) return;
+      state.featuredCarouselRaf = requestAnimationFrame(syncFeaturedCarouselFromScroll);
+    }, { passive:true });
+    host.addEventListener('pointerdown', () => pauseFeaturedCarousel(10000), { passive:true });
+    host.addEventListener('touchstart', () => pauseFeaturedCarousel(10000), { passive:true });
+    host.addEventListener('wheel', () => pauseFeaturedCarousel(10000), { passive:true });
+    host.addEventListener('mouseenter', () => pauseFeaturedCarousel(12000));
+  }
+  requestAnimationFrame(() => setFeaturedCarouselIndex(state.featuredCarouselIndex, { smooth:false, user:false }));
+  scheduleFeaturedCarouselAutoplay();
+}
 function renderFeaturedCarousel() {
   const host=$('#featuredCarousel'); if(!host) return;
   const list=featuredCollections();
-  host.innerHTML=list.map(g=>{ const lead=g.items[0],thumb=thumbUrl(lead),done=g.items.filter(i=>percentFor(i)>=100).length; return `<article class="featured-card" data-open-collection="${escapeHtml(g.key)}"><div class="featured-cover">${thumb?`<img src="${thumb}" alt="" loading="lazy" data-remove-on-error="1">`:`<div class="featured-fallback">${escapeHtml(shortCover(g.label))}</div>`}<span class="featured-badge">${escapeHtml(g.category)}</span></div><div class="featured-body"><strong>${escapeHtml(g.label)}</strong><small>${g.items.length} arquivo(s) • ${done} lidos</small><button data-open-collection="${escapeHtml(g.key)}">Abrir coleção</button></div></article>`; }).join('');
+  const section=$('#featuredSection');
+  section?.classList.toggle('hidden', !list.length);
+  state.featuredCarouselIndex = Math.min(state.featuredCarouselIndex, Math.max(0, list.length - 1));
+  host.innerHTML=list.map((g, index)=>{
+    const lead=featuredLeadItem(g), thumb=thumbUrl(lead), done=g.items.filter(i=>percentFor(i)>=100).length;
+    const reading=g.items.filter(i=>percentFor(i)>0 && percentFor(i)<100).length;
+    const newCount=g.items.filter(i=>isNewItem(i)).length;
+    const pct=g.items.length ? Math.round(done/g.items.length*100) : 0;
+    return `<article class="featured-card" data-open-collection="${escapeHtml(g.key)}" data-carousel-index="${index}">
+      <div class="featured-cover">
+        ${thumb ? `<div class="featured-cover-blur" aria-hidden="true"><img src="${thumb}" alt=""></div><img class="featured-cover-main" src="${thumb}" alt="" loading="${index < 2 ? 'eager' : 'lazy'}" data-remove-on-error="1">` : `<div class="featured-fallback">${escapeHtml(shortCover(g.label))}</div>`}
+        <span class="featured-badge">${escapeHtml(g.category)}</span>
+        ${newCount ? `<span class="featured-new">+${newCount} novo${newCount===1?'':'s'}</span>` : ''}
+      </div>
+      <div class="featured-body">
+        <span class="featured-kicker">COLEÇÃO EM DESTAQUE</span>
+        <strong>${escapeHtml(g.label)}</strong>
+        <div class="featured-meta"><span>${g.items.length} ${g.items.length===1?'edição':'edições'}</span><span>${reading ? `${reading} lendo` : `${done} lidos`}</span></div>
+        <div class="featured-progress" title="${pct}% da coleção concluída"><i style="width:${pct}%"></i></div>
+        <button data-open-collection="${escapeHtml(g.key)}">Explorar coleção <span>→</span></button>
+      </div>
+    </article>`;
+  }).join('');
+  const dots=$('#featuredCarouselDots');
+  if (dots) dots.innerHTML=list.map((_,i)=>`<button class="carousel-dot ${i===state.featuredCarouselIndex?'active':''}" data-carousel-dot="${i}" aria-label="Ir ao destaque ${i+1}" aria-current="${i===state.featuredCarouselIndex?'true':'false'}"></button>`).join('');
+  updateFeaturedCarouselUi(state.featuredCarouselIndex);
+  setupFeaturedCarousel();
 }
-function scrollFeatured(dir=1){ const host=$('#featuredCarousel'); if(!host)return; host.scrollBy({left:Math.max(260,Math.floor(host.clientWidth*.82))*dir,behavior:'smooth'}); }
+function scrollFeatured(dir=1){ setFeaturedCarouselIndex(state.featuredCarouselIndex + dir, { smooth:true, user:true }); }
 
 function cleanFolderLabel(path) {
   const leaf = String(path || '').split('/').filter(Boolean).at(-1) || '';
@@ -1521,7 +1651,9 @@ function updateAlphabetFromScroll() {
     if (section.getBoundingClientRect().top <= anchor) current = section;
     else break;
   }
-  setActiveAlphabetLetter(current.dataset.alphaSection || '', true);
+  // Sincronizar a letra ativa não pode mover a página. O scroll horizontal do
+  // índice acontece somente quando o usuário pede um salto explicitamente.
+  setActiveAlphabetLetter(current.dataset.alphaSection || '', false);
 }
 function scheduleAlphabetScrollSync() {
   if (alphabetScrollRaf) return;
@@ -1559,6 +1691,40 @@ function isNewItem(item, days = 30) {
   const ts = Date.parse(item?.modifiedTime || '');
   if (!Number.isFinite(ts)) return false;
   return Date.now() - ts <= days * 86400000 && Date.now() >= ts;
+}
+function formatRecentDate(item) {
+  const ts = Date.parse(item?.modifiedTime || '');
+  if (!Number.isFinite(ts)) return 'Acervo';
+  try { return new Intl.DateTimeFormat('pt-BR', { day:'2-digit', month:'short' }).format(new Date(ts)).replace('.', ''); }
+  catch { return 'Recente'; }
+}
+function renderRecentArrivals() {
+  const section = $('#recentSection');
+  const host = $('#recentRail');
+  if (!section || !host) return;
+  const show = !state.collection && !state.search && state.filter === 'all' && !state.category;
+  if (!show) { section.classList.add('hidden'); return; }
+  const items = [...sourcePool()]
+    .filter(item => item?.modifiedTime)
+    .sort((a,b) => String(b.modifiedTime || '').localeCompare(String(a.modifiedTime || '')))
+    .slice(0,10);
+  section.classList.toggle('hidden', !items.length);
+  host.innerHTML = items.map(item => {
+    const thumb=thumbUrl(item), fresh=isNewItem(item), pct=percentFor(item);
+    return `<article class="recent-card" data-recent-id="${escapeHtml(item.id)}">
+      <div class="recent-cover">${thumb ? `<img src="${thumb}" alt="" loading="lazy" data-remove-on-error="1">` : `<span>${escapeHtml(shortCover(item.name))}</span>`}${fresh?'<b>NOVO</b>':''}</div>
+      <div class="recent-copy"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(sourceLabelFor(item))} • ${escapeHtml(formatRecentDate(item))}</small>${pct? `<div class="recent-progress"><i style="width:${pct}%"></i></div>` : ''}</div>
+      <button data-recent-read="${escapeHtml(item.id)}" aria-label="Ler ${escapeHtml(item.name)}">Ler <span>→</span></button>
+    </article>`;
+  }).join('');
+}
+function openRandomLibraryItem() {
+  const pool = currentPool().filter(item => ['pdf','comic','pages'].includes(extType(item)));
+  if (!pool.length) return toast('Nenhuma leitura disponível neste filtro.');
+  const unread = pool.filter(item => percentFor(item) < 100);
+  const choices = unread.length ? unread : pool;
+  const item = choices[Math.floor(Math.random() * choices.length)];
+  if (item) openItem(item);
 }
 function resetRenderLimit() { state.renderLimit = performanceProfile().mobile ? 36 : 60; }
 function filtered() {
@@ -1639,6 +1805,7 @@ function render() {
   renderSourceOptions();
   renderContinueRail();
   renderFeaturedCarousel();
+  renderRecentArrivals();
   renderCategoryChips();
   renderUniverseRails();
   const group = state.collection ? collectionGroups(currentPool()).find(g => g.key === state.collection) : null;
@@ -3547,6 +3714,13 @@ async function openLocalSelected(file) {
 document.addEventListener('click', e => {
   const continueBtn = e.target.closest('[data-continue]');
   if (continueBtn) { const item = state.items.find(x => x.id === continueBtn.dataset.continue); if (item) openItem(item); return; }
+  const recentBtn = e.target.closest('[data-recent-read], .recent-card');
+  if (recentBtn) {
+    const id = recentBtn.dataset.recentRead || recentBtn.dataset.recentId || recentBtn.closest?.('.recent-card')?.dataset.recentId;
+    const item = state.items.find(x => x.id === id);
+    if (item) openItem(item);
+    return;
+  }
   const collectionBtn = e.target.closest('[data-open-collection]');
   if (collectionBtn) { state.collection = collectionBtn.dataset.openCollection; state.filter = 'all'; state.search = ''; $('#searchInput').value = ''; $$('.nav').forEach(n => n.classList.toggle('active', n.dataset.filter === 'all')); render(); return; }
   const categoryBtn = e.target.closest('[data-category]');
@@ -3591,6 +3765,21 @@ $('#clearCategoryBtn')?.addEventListener('click', () => { state.category = ''; r
 $('#alphabetIndex')?.addEventListener('click', e => { const btn=e.target.closest('[data-alpha]'); if (btn && !btn.disabled) jumpToCatalogLetter(btn.dataset.alpha); });
 $('#carouselPrevBtn')?.addEventListener('click', () => scrollFeatured(-1));
 $('#carouselNextBtn')?.addEventListener('click', () => scrollFeatured(1));
+$('#featuredCarouselDots')?.addEventListener('click', e => {
+  const dot=e.target.closest('[data-carousel-dot]');
+  if (dot) setFeaturedCarouselIndex(Number(dot.dataset.carouselDot || 0), { smooth:true, user:true });
+});
+$('#exploreLibraryBtn')?.addEventListener('click', () => {
+  pauseFeaturedCarousel(6000);
+  $('#featuredSection')?.scrollIntoView({ behavior:'smooth', block:'start' });
+});
+$('#randomReadBtn')?.addEventListener('click', openRandomLibraryItem);
+$('#recentAllBtn')?.addEventListener('click', () => {
+  state.sort='modified';
+  if ($('#sortSelect')) $('#sortSelect').value='modified';
+  render();
+  $('.toolbar')?.scrollIntoView({ behavior:'smooth', block:'start' });
+});
 $('#refreshBtn').addEventListener('click', loadLibrary);
 $('#cancelSyncBtn')?.addEventListener('click', () => state.syncController?.abort());
 function openDriveModal() {
@@ -4154,6 +4343,8 @@ function releaseDistantPageCache() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    clearTimeout(state.featuredCarouselTimer);
+    state.featuredCarouselTimer = 0;
     flushProgressSave();
     resetPrefetchQueue();
     clearPredecodedPages(new Set(effectiveMode() === 'spread' ? spreadIndexes() : [state.page]));
@@ -4161,6 +4352,8 @@ document.addEventListener('visibilitychange', () => {
     releaseDistantPageCache();
     if (state.pdfDoc) state.pdfDoc.cleanup?.().catch?.(() => {});
     if (isVerticalMode()) scheduleVerticalProgressSave();
+  } else {
+    scheduleFeaturedCarouselAutoplay();
   }
 });
 let readerResizeTimer = 0;
