@@ -1,40 +1,26 @@
-# Manga-HQ-hub v0.3.19
+# Manga-HQ-hub v0.3.20
 
-Leitor/PWA de mangás e HQs para PC e celular, com acervos conectados, PDF, CBR/CBZ/RAR/ZIP e páginas WebP.
+Leitor/PWA de mangás e HQs com acervos conectados, leitura PDF/CBR/CBZ/RAR/ZIP/WebP e interface responsiva.
 
-## v0.3.19 — Home e vitrine
+## v0.3.20 — cabeçalho da biblioteca fixo
 
-### Site abre no topo
-- desativa a restauração automática de scroll do navegador durante a inicialização;
-- reforça a posição 0 no carregamento inicial;
-- corrige o índice A–Z, que antes usava `scrollIntoView` enquanto apenas sincronizava a letra ativa;
-- o A–Z só desloca a página quando o usuário clica numa letra.
+A área de navegação da biblioteca agora acompanha o leitor durante a rolagem.
 
-### Carrossel de coleções
-- cartões maiores e com visual editorial;
-- capa principal com fundo desfocado;
-- categoria e indicador de novidades;
-- quantidade de edições e leitura em andamento;
-- barra de progresso da coleção;
-- indicador `1 / N` e pontos de navegação;
-- autoavanço a cada alguns segundos;
-- pausa automática ao tocar, arrastar, usar mouse ou roda;
-- respeita `prefers-reduced-motion`;
-- scroll-snap no celular.
+### Desktop
+- busca, fonte, ordenação, Atualizar e índice A–Z ficam juntos em um bloco sticky;
+- o bloco permanece logo abaixo do cabeçalho principal;
+- fundo translúcido com blur e separação visual do catálogo;
+- saltos A–Z calculam dinamicamente a altura real do cabeçalho para não esconder a letra selecionada.
 
-### Home mais atraente
-- botões **Explorar acervo** e **Ler algo aleatório** no hero;
-- nova faixa **Adicionados recentemente**;
-- destaque visual de itens novos;
-- cards recentes com fonte, data e progresso;
-- melhorias responsivas para telas pequenas.
+### Celular
+- o sticky permanece compacto: busca + botão de filtros + A–Z;
+- fonte, ordenação e Atualizar só aparecem ao tocar em **☰**;
+- ao fechar os filtros, o bloco volta a ocupar pouco espaço;
+- a altura é recalculada automaticamente quando o painel abre ou fecha.
 
-## Núcleo do leitor
-Mantém as melhorias da v0.3.18: limpeza de PDF não bloqueante, redução de RAM, fast pass no celular e abertura imediata de outro livro após **Sair**.
+### Correções de navegação
+- o destaque da letra ativa não usa mais `scrollIntoView` para centralizar o A–Z;
+- a centralização da letra acontece somente na rolagem horizontal do próprio índice;
+- isso evita que o site seja puxado verticalmente de forma inesperada.
 
-## Validação
-
-```bash
-npm test
-npm run validate:acervo
-```
+Mantém as melhorias da v0.3.19 e o núcleo PDF não bloqueante da v0.3.18.
