@@ -105,6 +105,7 @@ assert(app.includes('existing?.archive === archive'), 'page extraction/download 
 assert(app.includes("cache:'default'"), 'page manifests use browser cache');
 assert(app.includes('const canStage = Boolean(oldStages.length'), 'image staging swap exists');
 assert(app.includes("stage.style.visibility = 'hidden'"), 'staged images stay hidden until ready');
+assert(app.includes("const images = scope?.matches?.('.page-stage') ? $('img', scope) : $('.page-stage img', scope || document);"), 'staged image wiring uses querySelectorAll helper');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
