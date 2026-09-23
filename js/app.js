@@ -97,7 +97,7 @@ const readJson = (key, fallback) => {
 const state = {
   items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
-  pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalObserver: null,
+  pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalLoaded: new Set(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
   readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: ''
 };
@@ -2511,6 +2511,7 @@ async function renderPdfPageMode(token) {
 }
 
 async function renderPdfVerticalMode(token) {
+  state.verticalLoaded.clear();
   $('#readerFooter').classList.add('hidden');
   $('#readerBody').classList.remove('page-mode');
   $('#readerBody').innerHTML = `<div class="vertical-pages pdf-vertical ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot pdf-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
@@ -2774,6 +2775,7 @@ async function renderReaderPages() {
       if (token === state.renderToken && err?.name !== 'RenderingCancelledException') showReaderError('Falha ao renderizar PDF', err.message || String(err));
     }
   } else if (isVerticalMode()) {
+    state.verticalLoaded.clear();
     $('#readerFooter').classList.add('hidden');
     $('#readerBody').classList.remove('page-mode');
     $('#readerBody').innerHTML = `<div class="vertical-pages ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
@@ -2903,6 +2905,7 @@ async function loadVerticalSlot(slot) {
   if (!slot?.isConnected || slot.dataset.loaded === '1') return;
   const i = Number(slot.dataset.i);
   slot.dataset.loaded = '1';
+  state.verticalLoaded.add(i);
   try {
     if (extType(state.current || {}) === 'pdf' && state.pdfDoc) {
       await renderPdfInto(slot, i, state.renderToken, true);
@@ -2924,29 +2927,32 @@ async function loadVerticalSlot(slot) {
           return;
         }
       }
-      slot.dataset.loaded = '';
+      slot.dataset.loaded = ''; state.verticalLoaded.delete(i);
       slot.innerHTML = `<div class="page-load-error"><strong>Falha ao carregar a página ${i + 1}</strong><span>Confira o compartilhamento público do Drive ou configure uma API Key.</span><div><button data-retry-page="${i}">↻ Tentar novamente</button><button data-drive-page-settings>⚙ Configurar Drive</button></div></div>`;
     };
     slot.innerHTML = ''; slot.appendChild(img);
   } catch (err) {
-    slot.dataset.loaded = '';
+    slot.dataset.loaded = ''; state.verticalLoaded.delete(i);
     if (slot.isConnected) slot.innerHTML = `<button class="page-retry" data-retry-page="${i}">↻ Tentar página ${i + 1} novamente</button>`;
   }
 }
 
 
 function cleanupVerticalSlots(force = false) {
-  if (!isVerticalMode() || !state.pages.length) return;
+  if (!isVerticalMode() || !state.pages.length || !state.verticalLoaded.size) return;
   const profile = performanceProfile();
-  if (!force && !profile.mobile && !profile.eco) return;
-  const keep = profile.verticalWindow;
-  for (const slot of $$('.page-slot')) {
-    if (slot.dataset.loaded !== '1') continue;
-    const i = Number(slot.dataset.i);
+  if (!force && !profile.mobile && !profile.eco && !profile.memoryPressure) return;
+  const keep = force ? 0 : profile.verticalWindow;
+
+  for (const i of [...state.verticalLoaded]) {
     if (Math.abs(i - state.page) <= keep) continue;
+    const slot = $(`.page-slot[data-i="${i}"]`);
     state.pdfVerticalTasks.get(i)?.cancel?.(); state.pdfVerticalTasks.delete(i);
-    slot.dataset.loaded = '';
-    slot.innerHTML = `<span class="page-placeholder">Página ${i + 1}</span>`;
+    state.verticalLoaded.delete(i);
+    if (slot) {
+      slot.dataset.loaded = '';
+      slot.innerHTML = `<span class="page-placeholder">Página ${i + 1}</span>`;
+    }
     if (extType(state.current || {}) !== 'pdf' && state.pageUrls.has(i)) {
       const cachedUrl = state.pageUrls.get(i);
       if (String(cachedUrl).startsWith('blob:')) URL.revokeObjectURL(cachedUrl);
@@ -3146,7 +3152,7 @@ async function cleanupReaderData() {
   state.pdfRenderTask?.cancel?.(); state.pdfRenderTask = null;
   for (const task of state.pdfVerticalTasks.values()) task?.cancel?.(); state.pdfVerticalTasks.clear(); state.pdfWarmupSeq++; clearTimeout(state.pdfVerticalUpgradeTimer); state.pdfVerticalUpgradeTimer=0; state.pdfLastStagedPage=-1; clearPdfZoomPreview();
   if (state.pdfDoc) { await state.pdfDoc.destroy().catch(() => {}); state.pdfDoc = null; }
-  state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
+  state.verticalLoaded.clear(); state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
 }
 async function closeReader(fromHistory = false) {
   const shouldGoBack = !fromHistory && state.readerHistoryActive && history.state?.mhqrReader;
@@ -3254,7 +3260,7 @@ document.addEventListener('click', e => {
       if (String(oldUrl).startsWith('blob:')) URL.revokeObjectURL(oldUrl);
       state.pageUrls.delete(i); state.pageUse.delete(i);
       const slot = $(`.page-slot[data-i="${i}"]`);
-      if (slot) { slot.dataset.loaded = ''; loadVerticalSlot(slot).catch(() => {}); }
+      if (slot) { slot.dataset.loaded = ''; state.verticalLoaded.delete(i); loadVerticalSlot(slot).catch(() => {}); }
       else { setPage(i); }
     }
     return;
