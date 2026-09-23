@@ -1,5 +1,14 @@
 # Changelog — Manga-HQ-hub
 
+## 0.3.24 — instalação PWA visível
+
+- Torna a instalação do PWA fácil de encontrar no celular.
+- Adiciona CTA “Instalar no celular” na home.
+- Corrige o caso em que o botão de instalação ficava escondido por CSS no layout mobile.
+- Adiciona fallback com instruções quando `beforeinstallprompt` não estiver disponível.
+- Detecta o modo standalone e esconde o botão após a instalação.
+
+
 ## 0.3.23 — leitor vertical mobile resiliente
 
 - Define leitura vertical contínua como padrão no celular quando não existe preferência salva para a HQ.
