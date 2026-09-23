@@ -1,75 +1,78 @@
-# Manga-HQ-hub v0.3.14
+# Manga-HQ-hub v0.3.15
 
-Leitor/PWA de mangás e HQs com núcleo otimizado para reduzir trabalho repetido, abrir páginas mais rápido e manter o uso de memória controlado.
+Leitor/PWA de mangás e HQs com núcleo otimizado para leitura longa no celular, PDF, WebP, CBR e CBZ.
 
-## v0.3.14 — deduplicação e troca de página mais rápida
+## v0.3.15 — progresso e Vertical/Webtoon mais leves
 
-### Uma página, um trabalho
+### Progresso sem microtravadas
 
-O leitor agora mantém um mapa de operações de página em andamento.
+O progresso de leitura deixou de ser gravado no `localStorage` a cada atualização imediatamente.
 
-Se a mesma página for pedida ao mesmo tempo por:
-- leitor normal;
-- Vertical/Webtoon;
-- prefetch;
-- mudança rápida de página,
+Agora:
+- alterações são agrupadas por um pequeno debounce;
+- fechar o leitor força uma gravação imediata;
+- mandar o app para segundo plano também força a gravação;
+- ações explícitas como **Marcar lido/não lido** continuam sendo persistidas imediatamente.
 
-a extração/download é compartilhada em vez de começar de novo.
+Isso reduz bloqueios síncronos no thread principal durante leitura e rolagem.
 
-Isso ajuda principalmente em **CBZ/CBR**, onde extrair a mesma imagem duas vezes desperdiçava CPU e RAM.
+### Estatísticas da biblioteca
 
-### Predecode limitado
+O leitor não recalcula mais todos os totais da biblioteca em toda troca de página.
 
-Quando o aparelho permite:
-- celular mantém no máximo **1 página futura decodificada**;
-- desktop mantém no máximo **2**;
-- Econômico, memória pressionada e conexão limitada desativam esse comportamento.
+As contagens completas só são atualizadas quando o item muda entre:
+- não lido;
+- lendo;
+- concluído.
 
-O objetivo é acelerar a próxima página sem transformar o leitor em um pré-carregador pesado.
+### Vertical/Webtoon em HQs grandes
 
-### Prefetch cancelável
+A descoberta da página atual deixou de medir todos os `.page-slot` a cada scroll.
 
-Ao trocar de página, fechar o leitor ou mandar o app para segundo plano:
-- a fila de prefetch é esvaziada;
-- o AbortController cancela downloads especulativos;
-- imagens pré-decodificadas distantes são liberadas.
+O núcleo agora:
+1. usa um ponto de leitura dentro do viewport;
+2. identifica diretamente o slot sob esse ponto;
+3. se necessário, mede apenas uma pequena janela ao redor da página atual.
 
-### WebP/CBR/CBZ sem tela vazia
+Isso mantém o custo de rolagem praticamente constante mesmo quando a HQ tem centenas de páginas.
 
-A troca paginada agora usa staging leve:
-1. a página atual continua visível;
-2. a nova página começa a carregar em uma camada invisível;
-3. depois de decodificada, ocorre a troca;
-4. em pressão de memória o staging é desativado e o leitor volta ao comportamento econômico.
+### Slots ativos
 
-Isso melhora a sensação de velocidade sem manter várias páginas na memória por muito tempo.
+O leitor mantém um `Set` apenas com as páginas Vertical/Webtoon realmente carregadas.
 
-### Manifestos mais rápidos
+Na limpeza de memória:
+- só esses slots ativos são examinados;
+- renders PDF fora da janela continuam sendo cancelados;
+- Blob URLs distantes continuam revogados;
+- placeholders não carregados não entram mais na varredura.
 
-Manifestos de páginas passam a usar o cache normal do navegador/Service Worker em vez de `no-store` em toda abertura.
+### Pintura do navegador
 
-O catálogo principal continua usando atualização própria para detectar novas HQs.
+Vertical/Webtoon usam `content-visibility:auto` e contenção de pintura.
 
-### Segundo plano
+Páginas distantes podem ser ignoradas pelo motor de renderização até se aproximarem do viewport, reduzindo layout/paint em documentos longos.
 
-Ao ocultar o app:
-- prefetch é cancelado;
-- páginas decodificadas distantes são liberadas;
-- cache de páginas distantes é reduzido;
-- PDF.js recebe um pedido de limpeza de recursos;
-- progresso Vertical/Webtoon continua salvo.
+### Próxima edição
 
-## Mantido da v0.3.13
+A procura pela próxima HQ da série agora é cacheada para o item aberto, evitando filtrar e ordenar todo o catálogo em cada troca de página.
 
-- runtimes PDF/CBR/CBZ sob demanda;
-- fallback de CDN;
-- retry automático de PDF com DPR menor;
-- limite de canvas;
-- detecção de pressão de memória;
-- fallback para WebViews sem IntersectionObserver;
-- qualidade PDF adaptativa;
+### Miniaturas
+
+Ao mudar de página, somente a miniatura anteriormente ativa e a atual recebem atualização de classe. O leitor não percorre mais todas as miniaturas abertas a cada página.
+
+## Mantido das versões anteriores
+
+- deduplicação de extração/download;
+- predecode limitado;
+- prefetch cancelável;
+- staging sem tela vazia;
+- PDF com retry de DPR;
+- runtimes sob demanda;
+- pressão de memória adaptativa;
+- fallback para WebViews antigos;
 - filtro de baixa resolução;
 - zoom móvel;
+- qualidade PDF adaptativa;
 - Acervo 1, Acervo 2 e Acervo Marvel.
 
 ## Validação
