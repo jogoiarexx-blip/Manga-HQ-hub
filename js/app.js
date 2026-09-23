@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.13',
+  appVersion: '0.3.14',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -97,9 +97,9 @@ const readJson = (key, fallback) => {
 const state = {
   items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
-  pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
+  pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -868,10 +868,9 @@ function drivePageFallbackUrls(page, size = 'w2400') {
     directDownloadUrl(page)
   ].filter(Boolean);
 }
-async function fetchDrivePageWithApi(page, expectedToken = state.renderToken) {
+async function fetchDrivePageWithApi(page, expectedArchive = state.archive) {
   const key = getApiKey();
   if (!key || !page?.id) return '';
-  const archive = state.archive;
   const u = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(page.id)}`);
   u.searchParams.set('alt', 'media');
   u.searchParams.set('key', key);
@@ -882,7 +881,7 @@ async function fetchDrivePageWithApi(page, expectedToken = state.renderToken) {
     const contentType = r.headers.get('content-type') || '';
     if (contentType && !contentType.startsWith('image/')) return '';
     const blob = await r.blob();
-    if (!blob.size || expectedToken !== state.renderToken || archive !== state.archive) return '';
+    if (!blob.size || expectedArchive !== state.archive) return '';
     return URL.createObjectURL(blob);
   } catch {
     return '';
@@ -2082,7 +2081,7 @@ async function openComic(item, token) {
 
 async function loadDrivePageFolder(item, token) {
   if (item?.manifestUrl) {
-    const r = await fetch(item.manifestUrl, { cache:'no-store' });
+    const r = await fetch(item.manifestUrl, { cache:'default' });
     if (!r.ok) throw new Error(`Manifesto do acervo: HTTP ${r.status}`);
     const manifest = await r.json();
     if (token !== state.openToken) throw new DOMException('Leitura cancelada.', 'AbortError');
@@ -2507,82 +2506,163 @@ async function getPageUrl(index, expectedToken = state.renderToken) {
   const archive = state.archive;
   const page = state.pages[index];
   if (!archive || !page) throw new Error('Página inexistente.');
-  if (state.pageUrls.has(index)) { state.pageUse.set(index, Date.now()); return state.pageUrls.get(index); }
-  const entry = archive.entries[index];
-  if (archive.type === 'web-pages') {
-    const url = entry?.url || '';
-    if (!url) throw new Error(`Página ${index + 1} sem URL no acervo.`);
-    state.pageUrls.set(index, url); state.pageUse.set(index, Date.now());
-    trimPageCache(index);
-    return url;
+
+  if (state.pageUrls.has(index)) {
+    state.pageUse.set(index, Date.now());
+    return state.pageUrls.get(index);
   }
-  if (archive.type === 'drive-pages') {
-    const size = performanceProfile().eco ? 'w1800' : 'w2400';
-    const apiUrl = await fetchDrivePageWithApi(entry, expectedToken);
-    const url = apiUrl || drivePagePublicUrl(entry, size);
-    if (!url) throw new Error(`Página ${index + 1} sem ID do Google Drive.`);
-    if (expectedToken !== state.renderToken || archive !== state.archive) {
-      if (String(apiUrl).startsWith('blob:')) URL.revokeObjectURL(apiUrl);
+
+  const existing = state.pagePending.get(index);
+  if (existing?.archive === archive) return existing.promise;
+
+  const promise = (async () => {
+    const entry = archive.entries[index];
+    let url = '';
+    let createdBlobUrl = '';
+
+    if (archive.type === 'web-pages') {
+      url = entry?.url || '';
+      if (!url) throw new Error(`Página ${index + 1} sem URL no acervo.`);
+    } else if (archive.type === 'drive-pages') {
+      const size = performanceProfile().eco ? 'w1800' : 'w2400';
+      const apiUrl = await fetchDrivePageWithApi(entry, archive);
+      createdBlobUrl = String(apiUrl).startsWith('blob:') ? apiUrl : '';
+      url = apiUrl || drivePagePublicUrl(entry, size);
+      if (!url) throw new Error(`Página ${index + 1} sem ID do Google Drive.`);
+    } else {
+      let blob;
+      if (archive.type === 'zip') {
+        blob = await entry.async('blob');
+      } else {
+        const result = archive.engine.extract({ files:[entry.name] });
+        const files = [...result.files];
+        const file = files.find(f => f.fileHeader?.name === entry.name) || files[0];
+        if (!file?.extraction) throw new Error(`Falha ao extrair a página ${index + 1}.`);
+        blob = new Blob([file.extraction], { type:mimeFromName(entry.name) });
+      }
+      url = URL.createObjectURL(blob);
+      createdBlobUrl = url;
+    }
+
+    // O trabalho continua útil mesmo se o usuário avançar de página, mas não se
+    // o arquivo inteiro tiver sido trocado/fechado.
+    if (archive !== state.archive) {
+      if (createdBlobUrl) URL.revokeObjectURL(createdBlobUrl);
       throw new DOMException('Leitura cancelada.', 'AbortError');
     }
-    state.pageUrls.set(index, url); state.pageUse.set(index, Date.now());
+
+    state.pageUrls.set(index, url);
+    state.pageUse.set(index, Date.now());
     trimPageCache(index);
     return url;
+  })();
+
+  state.pagePending.set(index, { archive, promise });
+  try {
+    return await promise;
+  } finally {
+    const current = state.pagePending.get(index);
+    if (current?.promise === promise) state.pagePending.delete(index);
   }
-  let blob;
-  if (archive.type === 'zip') {
-    blob = await entry.async('blob');
-  } else {
-    const result = archive.engine.extract({ files: [entry.name] });
-    const files = [...result.files];
-    const file = files.find(f => f.fileHeader?.name === entry.name) || files[0];
-    if (!file?.extraction) throw new Error(`Falha ao extrair a página ${index + 1}.`);
-    blob = new Blob([file.extraction], { type: mimeFromName(entry.name) });
-  }
-  // A troca/fechamento do leitor invalida extrações que ainda estavam em andamento.
-  if (expectedToken !== state.renderToken || archive !== state.archive) throw new DOMException('Leitura cancelada.', 'AbortError');
-  const url = URL.createObjectURL(blob);
-  state.pageUrls.set(index, url); state.pageUse.set(index, Date.now());
-  trimPageCache(index);
-  return url;
 }
 
-async function prefetchPage(index, expectedToken = state.renderToken) {
-  if (index < 0 || index >= state.pages.length || expectedToken !== state.renderToken) return;
-  const url = await getPageUrl(index, expectedToken);
-  if (['drive-pages','web-pages'].includes(state.archive?.type) && expectedToken === state.renderToken && url) {
-    try { await fetch(url, { cache:'force-cache', priority:'low' }); } catch {}
+function clearPredecodedPages(keep = new Set()) {
+  for (const [index, img] of [...state.predecodedPages.entries()]) {
+    if (keep.has(index)) continue;
+    try { img.src = ''; } catch {}
+    state.predecodedPages.delete(index);
   }
+}
+function trimPredecodedPages(center = state.page) {
+  const p = performanceProfile();
+  const limit = p.mobile ? 1 : 2;
+  if (state.predecodedPages.size <= limit) return;
+  const candidates = [...state.predecodedPages.keys()]
+    .filter(i => i !== center)
+    .sort((a,b) => Math.abs(b-center) - Math.abs(a-center));
+  while (state.predecodedPages.size > limit && candidates.length) {
+    const i = candidates.shift();
+    const img = state.predecodedPages.get(i);
+    try { if (img) img.src = ''; } catch {}
+    state.predecodedPages.delete(i);
+  }
+}
+async function predecodePage(index, url, signal) {
+  const p = performanceProfile();
+  if (!p.prefetch || p.memoryPressure || p.eco || !url || signal?.aborted) return;
+  if (state.predecodedPages.has(index)) return;
+
+  const img = new Image();
+  img.decoding = 'async';
+  img.fetchPriority = 'low';
+  img.src = url;
+
+  try {
+    if (typeof img.decode === 'function') {
+      await Promise.race([
+        img.decode(),
+        new Promise((_, reject) => {
+          const id = setTimeout(() => reject(new Error('decode timeout')), p.mobile ? 1400 : 2200);
+          signal?.addEventListener?.('abort', () => { clearTimeout(id); reject(new DOMException('Prefetch cancelado.','AbortError')); }, { once:true });
+        })
+      ]);
+    } else {
+      await new Promise((resolve,reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        signal?.addEventListener?.('abort', () => reject(new DOMException('Prefetch cancelado.','AbortError')), { once:true });
+      });
+    }
+    if (signal?.aborted || !p.prefetch) { img.src=''; return; }
+    state.predecodedPages.set(index, img);
+    trimPredecodedPages(state.page);
+  } catch {
+    try { img.src=''; } catch {}
+  }
+}
+async function prefetchPage(index, expectedToken = state.renderToken, signal = state.prefetchController?.signal) {
+  if (index < 0 || index >= state.pages.length || expectedToken !== state.renderToken || signal?.aborted) return;
+  const url = await getPageUrl(index, expectedToken);
+  if (expectedToken !== state.renderToken || signal?.aborted) return;
+  await predecodePage(index, url, signal);
 }
 function resetPrefetchQueue() {
   state.prefetchQueue = [];
   state.prefetchQueued.clear();
+  state.prefetchController?.abort?.();
+  state.prefetchController = new AbortController();
 }
 function pumpPrefetchQueue() {
   const token = state.renderToken;
+  if (!state.prefetchController || state.prefetchController.signal.aborted) state.prefetchController = new AbortController();
+  const controller = state.prefetchController;
   const limit = performanceProfile().mobile ? 1 : 2;
+
   while (state.prefetchActive < limit && state.prefetchQueue.length) {
     const job = state.prefetchQueue.shift();
     if (!job) break;
     state.prefetchQueued.delete(job.key);
-    if (job.token !== token || job.index < 0 || job.index >= state.pages.length) continue;
+    if (job.token !== token || job.index < 0 || job.index >= state.pages.length || controller.signal.aborted) continue;
+
     state.prefetchActive++;
-    const run = () => prefetchPage(job.index, job.token).catch(() => {}).finally(() => {
+    const run = () => prefetchPage(job.index, job.token, controller.signal).catch(() => {}).finally(() => {
       state.prefetchActive = Math.max(0, state.prefetchActive - 1);
-      pumpPrefetchQueue();
+      if (!controller.signal.aborted) pumpPrefetchQueue();
     });
-    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:900 });
-    else setTimeout(run, 120);
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:700 });
+    else setTimeout(run, performanceProfile().mobile ? 70 : 100);
   }
 }
 function queuePagePrefetch(index, expectedToken = state.renderToken) {
   if (!performanceProfile().prefetch || index < 0 || index >= state.pages.length || expectedToken !== state.renderToken) return;
+  if (state.page === index || state.predecodedPages.has(index)) return;
   const key = `${expectedToken}:${index}`;
   if (state.prefetchQueued.has(key)) return;
   state.prefetchQueued.add(key);
   state.prefetchQueue.push({ index, token:expectedToken, key });
   pumpPrefetchQueue();
 }
+
 function prefetchNeighborSpreads(expectedToken = state.renderToken) {
   const profile = performanceProfile();
   if (effectiveMode() !== 'spread' || !profile.prefetch) return;
@@ -2638,7 +2718,6 @@ function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
       applyMobileReadingScaleToImage(img, index, img.naturalWidth, img.naturalHeight);
       applyImageZoomWithoutRender(state.zoom);
       scheduleReaderVisualRefresh();
-      refreshMobileReadingScale();
     }, { once:true });
     img.addEventListener('error', () => {
       const index = indexes[n] ?? state.page;
@@ -2932,6 +3011,7 @@ async function setPage(n) {
       $('#readerBody')?.classList.remove('is-zoomed');
     }
     resetPrefetchQueue();
+    clearPredecodedPages(new Set([target]));
     await renderReaderPages();
     resetPagedScrollPosition();
     if (extType(state.current || {}) === 'pdf') schedulePdfNeighborWarmup();
@@ -2953,7 +3033,7 @@ async function cleanupReaderData() {
   state.readerDownloadController = null;
   stopVerticalObserver();
   state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0; cancelAnimationFrame(state.displayRefreshRaf || 0); state.displayRefreshRaf = 0;
-  resetPrefetchQueue(); state.prefetchActive = 0; clearTimeout(state.verticalSaveTimer); state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
+  resetPrefetchQueue(); state.prefetchActive = 0; state.pagePending.clear(); clearPredecodedPages(); clearTimeout(state.verticalSaveTimer); state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
@@ -3608,7 +3688,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.13', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.14', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -3656,8 +3736,11 @@ function releaseDistantPageCache() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    resetPrefetchQueue();
+    clearPredecodedPages(new Set(effectiveMode() === 'spread' ? spreadIndexes() : [state.page]));
     cleanupVerticalSlots(true);
     releaseDistantPageCache();
+    if (state.pdfDoc) state.pdfDoc.cleanup?.().catch?.(() => {});
     if (isVerticalMode()) scheduleVerticalProgressSave();
   }
 });
