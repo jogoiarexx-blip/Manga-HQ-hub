@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.20';
+const VERSION = '0.3.21';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.20'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.21'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -174,6 +174,12 @@ assert(app.includes('function libraryStickyScrollOffset'), 'alphabet jumps accou
 const alphaRevealBlock = app.slice(app.indexOf('function setActiveAlphabetLetter'), app.indexOf('let alphabetScrollRaf', app.indexOf('function setActiveAlphabetLetter')));
 assert(!alphaRevealBlock.includes('scrollIntoView'), 'alphabet reveal only scrolls horizontally');
 assert(alphaRevealBlock.includes('host.scrollTo'), 'alphabet reveal centers button horizontally');
+assert(index.indexOf('id="libraryStickyHead"') < index.indexOf('id="continueSection"'), 'sticky header is before discovery rails');
+assert(css.includes('.grid>.card{display:grid'), 'mobile horizontal card rule is scoped to main library grid');
+assert(css.includes('.mini-card{\n    display:grid;\n    grid-template-columns:1fr;'), 'mobile universe cards stay vertical');
+assert(css.includes('.universe-track::-webkit-scrollbar'), 'horizontal rail scrollbars are hidden');
+assert(app.includes("const browsingHome = !state.collection && !state.search && state.filter === 'all' && !state.category;"), 'featured discovery hides during active search/filter');
+assert(app.includes("const showHomeCategories = !state.collection && !state.search && state.filter === 'all';"), 'category discovery hides during search/filter');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
