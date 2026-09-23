@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.15 */
+/* Manga-HQ-hub reader styles — v0.3.16 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -1138,5 +1138,41 @@
   .reader.mobile-fullbleed.reader-mode-vertical .page-slot{
     content-visibility:auto;
     contain-intrinsic-size:auto 1400px;
+  }
+}
+
+
+/* Manga-HQ-hub v0.3.16 — botão Sair */
+.reader-exit-btn{
+  position:relative;
+  z-index:181;
+  min-width:64px;
+  height:42px;
+  padding:0 16px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:12px;
+  background:rgba(0,0,0,.46);
+  color:#fff;
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.01em;
+  cursor:pointer;
+  pointer-events:auto;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+.reader-exit-btn:active{
+  transform:scale(.96);
+}
+@media(max-width:850px){
+  .reader-close-btn.reader-exit-btn{
+    width:auto!important;
+    min-width:68px!important;
+    height:44px!important;
+    padding:0 16px!important;
   }
 }
