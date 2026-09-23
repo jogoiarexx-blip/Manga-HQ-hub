@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Manga-HQ-hub deploy v0.3.20 -->
+<!-- Manga-HQ-hub deploy v0.3.21 -->
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
@@ -11,12 +11,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="description" content="Leitor de mangás e HQs com acervo WebP conectado, além de suporte a PDF, CBR, CBZ, RAR e ZIP." />
-  <title>Manga-HQ-hub v0.3.20</title>
+  <title>Manga-HQ-hub v0.3.21</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon-64.png" type="image/png" />
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="./css/app.css?v=0.3.20" />
-  <link rel="stylesheet" href="./css/reader.css?v=0.3.20" />
+  <link rel="stylesheet" href="./css/app.css?v=0.3.21" />
+  <link rel="stylesheet" href="./css/reader.css?v=0.3.21" />
 </head>
 <body class="no-drive-build">
   <div class="bg-decor" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span><span class="grid-fade"></span></div>
@@ -82,6 +82,30 @@
           <button id="noticeSettingsBtn">Configurar</button>
         </div>
 
+        <div id="libraryStickyHead" class="library-sticky-head" aria-label="Busca, filtros e navegação alfabética">
+          <div class="toolbar">
+            <label class="search"><span>⌕</span><input id="searchInput" placeholder="Buscar título, volume, edição..." /></label>
+            <button id="mobileFilterBtn" class="mobile-filter-btn" title="Abrir filtros" aria-label="Abrir filtros" aria-expanded="false">☰</button>
+            <select id="sourceSelect" aria-label="Filtrar por fonte">
+              <option value="all">Todas as fontes</option>
+              <option value="offline">Offline/local</option>
+              <option value="external-acervo-1">Manga HQ Acervo 1</option>
+              <option value="external-acervo-2">Manga HQ Acervo 2</option>
+            </select>
+            <select id="sortSelect" aria-label="Ordenar biblioteca">
+              <option value="name">Nome A–Z</option>
+              <option value="name-desc">Nome Z–A</option>
+              <option value="size">Menor arquivo</option>
+              <option value="size-desc">Maior arquivo</option>
+              <option value="recent">Lidos recentemente</option>
+              <option value="modified">Adicionados recentemente</option>
+            </select>
+            <button id="refreshBtn">Atualizar</button>
+          </div>
+
+          <nav id="alphabetIndex" class="alphabet-index" aria-label="Atalhos alfabéticos do catálogo"></nav>
+        </div>
+
         <section id="continueSection" class="continue-section hidden">
           <div class="section-head"><div><span class="eyebrow">RETOMAR</span><h2>Continue de onde parou</h2></div><button id="showReadingBtn" class="ghost small">Ver todos</button></div>
           <div id="continueRail" class="continue-rail"></div>
@@ -121,30 +145,6 @@
         <section id="universeRails" class="universe-rails"></section>
 
         <div id="collectionBar" class="collection-bar hidden"><button id="backCollectionsBtn" class="ghost">← Coleções</button><strong id="collectionTitle"></strong><span id="collectionMeta"></span></div>
-
-        <div id="libraryStickyHead" class="library-sticky-head" aria-label="Busca, filtros e navegação alfabética">
-          <div class="toolbar">
-            <label class="search"><span>⌕</span><input id="searchInput" placeholder="Buscar título, volume, edição..." /></label>
-            <button id="mobileFilterBtn" class="mobile-filter-btn" title="Abrir filtros" aria-label="Abrir filtros" aria-expanded="false">☰</button>
-            <select id="sourceSelect" aria-label="Filtrar por fonte">
-              <option value="all">Todas as fontes</option>
-              <option value="offline">Offline/local</option>
-              <option value="external-acervo-1">Manga HQ Acervo 1</option>
-              <option value="external-acervo-2">Manga HQ Acervo 2</option>
-            </select>
-            <select id="sortSelect" aria-label="Ordenar biblioteca">
-              <option value="name">Nome A–Z</option>
-              <option value="name-desc">Nome Z–A</option>
-              <option value="size">Menor arquivo</option>
-              <option value="size-desc">Maior arquivo</option>
-              <option value="recent">Lidos recentemente</option>
-              <option value="modified">Adicionados recentemente</option>
-            </select>
-            <button id="refreshBtn">Atualizar</button>
-          </div>
-
-          <nav id="alphabetIndex" class="alphabet-index" aria-label="Atalhos alfabéticos do catálogo"></nav>
-        </div>
 
         <div id="emptyState" class="empty hidden">Nenhum item encontrado.</div>
         <div id="libraryGrid" class="grid"></div>
@@ -301,7 +301,7 @@
   <input id="localFileInput" class="hidden" type="file" accept=".pdf,.cbr,.cbz,.rar,.zip,application/pdf,application/x-rar-compressed,application/zip" />
   <input id="importDataInput" class="hidden" type="file" accept="application/json,.json" />
 
-  <script src="./config.js?v=0.3.20"></script>
-  <script type="module" src="./js/app.js?v=0.3.20"></script>
+  <script src="./config.js?v=0.3.21"></script>
+  <script type="module" src="./js/app.js?v=0.3.21"></script>
 </body>
 </html>
