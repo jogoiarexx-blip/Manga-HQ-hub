@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.14',
+  appVersion: '0.3.15',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -99,7 +99,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: ''
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -728,7 +728,22 @@ async function clearOfflineLibrary() {
   await refreshOfflineIndex(); await updateOfflineStorageInfo(); render(); toast('Biblioteca offline limpa.');
 }
 function saveFav() { storageSet(LS.fav, JSON.stringify([...favorites])); }
-function saveProgress() { storageSet(LS.progress, JSON.stringify(progress)); }
+function flushProgressSave() {
+  clearTimeout(state.progressSaveTimer);
+  state.progressSaveTimer = 0;
+  if (!state.progressDirty) return;
+  state.progressDirty = false;
+  storageSet(LS.progress, JSON.stringify(progress));
+}
+function saveProgress(immediate = false) {
+  state.progressDirty = true;
+  if (immediate) {
+    flushProgressSave();
+    return;
+  }
+  clearTimeout(state.progressSaveTimer);
+  state.progressSaveTimer = setTimeout(flushProgressSave, performanceProfile().mobile ? 420 : 260);
+}
 function getApiKey() { return (storageGet(LS.apiKey) || CONFIG.driveApiKey || '').trim(); }
 function bytes(n) {
   n = Number(n || 0);
@@ -1563,6 +1578,7 @@ function updateLibraryStats() {
   updateOfflineStorageInfo();
 }
 function render() {
+  if (state.nextIssueCacheFor && !state.items.some(item => item.id === state.nextIssueCacheId)) { state.nextIssueCacheFor=''; state.nextIssueCacheId=''; }
   updateLibraryStats();
   renderSourceOptions();
   renderContinueRail();
@@ -2954,7 +2970,7 @@ function scheduleVerticalProgressSave() {
     const current = progress[state.current.id] || {};
     progress[state.current.id] = { ...current, page:state.page, mode:state.mode, direction:state.direction, verticalOffsetRatio:currentVerticalOffsetRatio(), updated:Date.now() };
     saveProgress();
-  }, 260);
+  }, 360);
 }
 function restoreVerticalPosition(force = false) {
   if (!isVerticalMode() || !state.pages.length) return;
@@ -2986,11 +3002,34 @@ function schedulePdfVerticalQualityUpgrade(index) {
 
 function updateVerticalPosition() {
   if (!isVerticalMode() || !state.pages.length) return;
-  const rootRect = $('#readerBody').getBoundingClientRect(); let best = state.page; let dist = Infinity;
-  for (const slot of $$('.page-slot')) {
-    const d = Math.abs(slot.getBoundingClientRect().top - rootRect.top);
-    if (d < dist) { dist = d; best = Number(slot.dataset.i); }
+  const root = $('#readerBody');
+  if (!root) return;
+  const rect = root.getBoundingClientRect();
+
+  // Primeiro tenta identificar diretamente a página que cruza uma linha de leitura
+  // dentro do viewport. Isso evita medir centenas de slots a cada evento de scroll.
+  const probeX = Math.max(rect.left + 1, Math.min(rect.right - 1, rect.left + rect.width * .5));
+  const probeY = Math.max(rect.top + 1, Math.min(rect.bottom - 1, rect.top + Math.min(180, rect.height * .32)));
+  const probe = document.elementFromPoint(probeX, probeY);
+  const directSlot = probe?.closest?.('.page-slot');
+  let best = directSlot ? Number(directSlot.dataset.i) : NaN;
+
+  // Fallback local: mede somente a janela ao redor da página atual.
+  if (!Number.isFinite(best)) {
+    let dist = Infinity;
+    const radius = Math.max(3, performanceProfile().verticalWindow + 2);
+    const start = Math.max(0, state.page - radius);
+    const end = Math.min(state.pages.length - 1, state.page + radius);
+    for (let i=start; i<=end; i++) {
+      const slot = $(`.page-slot[data-i="${i}"]`);
+      if (!slot) continue;
+      const sr = slot.getBoundingClientRect();
+      const d = Math.abs(sr.top - probeY);
+      if (d < dist) { dist = d; best = i; }
+    }
   }
+
+  if (!Number.isFinite(best)) best = state.page;
   if (best !== state.page) {
     state.page = best;
     state.verticalRestore = null;
@@ -3007,10 +3046,16 @@ function stopVerticalObserver() {
 }
 function getNextIssue() {
   if (!state.current || state.current.localFile) return null;
+  if (state.nextIssueCacheFor === state.current.id) {
+    return state.nextIssueCacheId ? state.items.find(item => item.id === state.nextIssueCacheId) || null : null;
+  }
   const currentKey = seriesKeyFor(state.current);
   const group = state.items.filter(i => seriesKeyFor(i) === currentKey).sort((a, b) => naturalSort(a.name, b.name));
   const i = group.findIndex(x => x.id === state.current.id);
-  return i >= 0 && i < group.length - 1 ? group[i + 1] : null;
+  const next = i >= 0 && i < group.length - 1 ? group[i + 1] : null;
+  state.nextIssueCacheFor = state.current.id;
+  state.nextIssueCacheId = next?.id || '';
+  return next;
 }
 function updatePageControls() {
   if (!state.pages.length) return;
@@ -3019,7 +3064,10 @@ function updatePageControls() {
   if (pageNumberInput) { pageNumberInput.max = state.pages.length; pageNumberInput.value = state.page + 1; }
   const visible = effectiveMode() === 'spread' ? spreadIndexes() : [state.page];
   const first = visible[0] + 1, last = visible[visible.length - 1] + 1;
-  $$('.thumb-item').forEach(b=>b.classList.toggle('active',Number(b.dataset.thumbPage)===state.page));
+  const previousThumb = $('#thumbGrid .thumb-item.active');
+  const currentThumb = $('#thumbGrid .thumb-item[data-thumb-page="' + state.page + '"]');
+  if (previousThumb && previousThumb !== currentThumb) previousThumb.classList.remove('active');
+  currentThumb?.classList.add('active');
   $('#pageLabel').textContent = visible.length > 1 ? `${first}–${last} / ${state.pages.length}` : `${first} / ${state.pages.length}`;
   const next = getNextIssue();
   const showNext = state.page >= state.pages.length - 1 && Boolean(next);
@@ -3027,12 +3075,24 @@ function updatePageControls() {
   updateBookmarkButton();
   if (showNext) $('#nextIssueBtn').title = next.name;
 }
+function progressBucket(value) {
+  const pct = Number(value || 0);
+  return pct >= 100 ? 2 : pct > 0 ? 1 : 0;
+}
 function updateProgress() {
   if (!state.current || !state.pages.length) return;
+  const previous = progress[state.current.id] || {};
+  const previousBucket = progressBucket(previous.percent);
   const readThrough = effectiveMode() === 'spread' ? (spreadIndexes().at(-1) + 1) : state.page + 1;
   const pct = Math.round((readThrough / state.pages.length) * 100);
-  progress[state.current.id] = { percent: pct, page: state.page, mode: state.mode, direction: state.direction, verticalOffsetRatio:isVerticalMode() ? currentVerticalOffsetRatio() : 0, updated: Date.now() };
-  saveProgress(); updateLibraryStats(); updateCompleteButton();
+  progress[state.current.id] = {
+    percent:pct, page:state.page, mode:state.mode, direction:state.direction,
+    verticalOffsetRatio:isVerticalMode() ? currentVerticalOffsetRatio() : 0,
+    updated:Date.now()
+  };
+  saveProgress();
+  if (previousBucket !== progressBucket(pct)) updateLibraryStats();
+  updateCompleteButton();
 }
 async function setPage(n) {
   if (!state.pages.length) return;
@@ -3078,7 +3138,7 @@ async function cleanupReaderData() {
   state.readerDownloadController = null;
   stopVerticalObserver();
   state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0; cancelAnimationFrame(state.displayRefreshRaf || 0); state.displayRefreshRaf = 0;
-  resetPrefetchQueue(); state.prefetchActive = 0; state.pagePending.clear(); clearPredecodedPages(); clearTimeout(state.verticalSaveTimer); state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
+  resetPrefetchQueue(); state.prefetchActive = 0; state.pagePending.clear(); clearPredecodedPages(); clearTimeout(state.verticalSaveTimer); clearTimeout(state.progressSaveTimer); state.progressSaveTimer = 0; state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
@@ -3095,6 +3155,7 @@ async function closeReader(fromHistory = false) {
   $('#readerDisplayPanel')?.classList.add('hidden');
   setImmersive(false);
   if (isVerticalMode()) { updateVerticalPosition(); updateProgress(); }
+  flushProgressSave();
   state.openToken++;
   await cleanupReaderData();
   clearReaderChromeTimer(); clearTimeout(readerControlsTimer);
@@ -3124,7 +3185,7 @@ function markComplete() {
     progress[state.current.id] = { percent: 100, page, mode: state.mode, direction: state.direction, updated: Date.now() };
     toast('Marcado como lido.');
   }
-  saveProgress(); updateLibraryStats(); updateCompleteButton(); render();
+  saveProgress(true); updateLibraryStats(); updateCompleteButton(); render();
 }
 
 async function runtimeAvailability(url) {
@@ -3182,7 +3243,7 @@ document.addEventListener('click', e => {
   const categoryBtn = e.target.closest('[data-category]');
   if (categoryBtn) { state.category = categoryBtn.dataset.category || ''; state.collection = ''; resetRenderLimit(); render(); return; }
   const bookmarkOpen = e.target.closest('[data-bookmark-open]');
-  if (bookmarkOpen) { const item=state.items.find(x=>x.id===bookmarkOpen.dataset.bookmarkOpen); if(item){ const pg=Number(bookmarkOpen.dataset.bookmarkPage||0); progress[item.id]={...(progress[item.id]||{}),page:pg,percent:progress[item.id]?.percent||0,updated:Date.now()}; saveProgress(); openItem(item); } return; }
+  if (bookmarkOpen) { const item=state.items.find(x=>x.id===bookmarkOpen.dataset.bookmarkOpen); if(item){ const pg=Number(bookmarkOpen.dataset.bookmarkPage||0); progress[item.id]={...(progress[item.id]||{}),page:pg,percent:progress[item.id]?.percent||0,updated:Date.now()}; saveProgress(true); openItem(item); } return; }
   const drivePageSettings = e.target.closest('[data-drive-page-settings]');
   if (drivePageSettings) { openSettings(); return; }
   const retryPage = e.target.closest('[data-retry-page]');
@@ -3733,7 +3794,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.14', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.15', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -3770,7 +3831,6 @@ $('#installBtn').addEventListener('click', async () => {
 });
 
 function releaseDistantPageCache() {
-  resetPrefetchQueue();
   if (!state.pages.length) return;
   const keep = new Set(effectiveMode() === 'spread' ? spreadIndexes() : [state.page]);
   for (const [index, url] of [...state.pageUrls.entries()]) {
@@ -3781,6 +3841,7 @@ function releaseDistantPageCache() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
+    flushProgressSave();
     resetPrefetchQueue();
     clearPredecodedPages(new Set(effectiveMode() === 'spread' ? spreadIndexes() : [state.page]));
     cleanupVerticalSlots(true);
