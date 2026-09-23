@@ -1,50 +1,36 @@
-# Manga-HQ-hub v0.3.18
+# Manga-HQ-hub v0.3.19
 
-Leitor/PWA de mangás e HQs otimizado para celular.
+Leitor/PWA de mangás e HQs para PC e celular, com acervos conectados, PDF, CBR/CBZ/RAR/ZIP e páginas WebP.
 
-## v0.3.18 — núcleo não bloqueante
+## v0.3.19 — Home e vitrine
 
-### Abrir outro livro imediatamente após Sair
+### Site abre no topo
+- desativa a restauração automática de scroll do navegador durante a inicialização;
+- reforça a posição 0 no carregamento inicial;
+- corrige o índice A–Z, que antes usava `scrollIntoView` enquanto apenas sincronizava a letra ativa;
+- o A–Z só desloca a página quando o usuário clica numa letra.
 
-O fechamento agora é dividido em duas fases:
+### Carrossel de coleções
+- cartões maiores e com visual editorial;
+- capa principal com fundo desfocado;
+- categoria e indicador de novidades;
+- quantidade de edições e leitura em andamento;
+- barra de progresso da coleção;
+- indicador `1 / N` e pontos de navegação;
+- autoavanço a cada alguns segundos;
+- pausa automática ao tocar, arrastar, usar mouse ou roda;
+- respeita `prefers-reduced-motion`;
+- scroll-snap no celular.
 
-1. **desanexar imediatamente** o documento, canvases, cache de páginas, prefetch e tarefas do leitor;
-2. **liberar memória em segundo plano**, usando uma fila que espera uma janela ociosa do navegador.
+### Home mais atraente
+- botões **Explorar acervo** e **Ler algo aleatório** no hero;
+- nova faixa **Adicionados recentemente**;
+- destaque visual de itens novos;
+- cards recentes com fonte, data e progresso;
+- melhorias responsivas para telas pequenas.
 
-O botão **Sair** não espera mais `PDFDocument.destroy()`, limpeza de canvases ou reconstrução completa da biblioteca.
-
-A biblioteca também não é reconstruída no mesmo instante do fechamento. O catálogo já visível continua clicável e a atualização de progresso é feita depois, sem bloquear o próximo toque.
-
-### Corrida de PDF carregando
-
-A tarefa `pdfjs.getDocument()` agora é rastreada separadamente.
-
-Um PDF antigo que terminar de carregar depois que você saiu:
-- não pode mais sobrescrever `state.pdfDoc`;
-- não pode limpar o PDF do livro novo;
-- é enviado para a fila de descarte;
-- tem o carregamento cancelado sem travar a interface.
-
-### Histórico seguro ao reabrir rápido
-
-O `history.back()` do botão **Sair** agora possui estado de assentamento.
-
-Se outro livro for aberto antes do `popstate` anterior chegar, a nova leitura continua aberta e recebe uma nova entrada de histórico somente depois que o fechamento anterior terminar.
-
-### Menos RAM em PDFs longos
-
-- janela vertical de PDF reduzida no celular;
-- cache de páginas de quadrinhos reduzido em aparelhos móveis;
-- limpeza periódica de recursos internos do PDF.js após várias trocas de página;
-- staging com dois canvases é desativado em aparelhos pequenos, modo econômico e pressão de memória;
-- canvases antigos são zerados fora do caminho crítico do clique.
-
-### Troca de página mais rápida
-
-No modo Página + PDF + celular + qualidade Automática:
-- a página aparece primeiro em um **fast pass** mais leve;
-- se o usuário parar na página, a qualidade é elevada em repouso;
-- se continuar avançando, o trabalho de melhoria é cancelado naturalmente pelo token de renderização.
+## Núcleo do leitor
+Mantém as melhorias da v0.3.18: limpeza de PDF não bloqueante, redução de RAM, fast pass no celular e abertura imediata de outro livro após **Sair**.
 
 ## Validação
 
