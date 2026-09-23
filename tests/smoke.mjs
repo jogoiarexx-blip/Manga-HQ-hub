@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.15';
+const VERSION = '0.3.16';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -114,6 +114,13 @@ assert(app.includes('verticalLoaded: new Set()'), 'active vertical slot registry
 assert(app.includes('for (const i of [...state.verticalLoaded])'), 'vertical cleanup only scans active slots');
 assert(app.includes('nextIssueCacheFor'), 'next issue lookup is cached');
 assert(readerCss.includes('content-visibility:auto'), 'vertical content visibility optimization exists');
+assert(index.includes('>Sair</button>'), 'reader exit button says Sair');
+assert(index.includes('class="reader-close-btn reader-exit-btn"'), 'reader exit button class exists');
+assert(app.includes("closeReader(false).catch"), 'exit button calls explicit normal close');
+assert(app.includes('const triggeredByHistory = fromHistory === true'), 'close history flag is strict boolean');
+assert(app.includes("reader.classList.add('hidden')"), 'reader hides before cleanup');
+assert(app.indexOf("reader.classList.add('hidden')") < app.indexOf('await cleanupReaderData();'), 'reader hides before heavy cleanup');
+assert(readerCss.includes('.reader-exit-btn'), 'reader exit button CSS exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
