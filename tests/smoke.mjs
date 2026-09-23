@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.13';
+const VERSION = '0.3.14';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -95,6 +95,16 @@ assert(app.includes("'IntersectionObserver' in window"), 'IntersectionObserver c
 assert(app.includes('displayRefreshRaf'), 'visual refresh batching exists');
 assert(app.includes('createFolders:false'), 'JSZip avoids folder objects');
 assert(!sw.includes('await cacheReaderRuntimes(cache);'), 'service worker does not eagerly download reader runtimes');
+assert(app.includes('pagePending: new Map()'), 'in-flight page dedup map exists');
+assert(app.includes('predecodedPages: new Map()'), 'predecoded page cache exists');
+assert(app.includes('prefetchController: null'), 'prefetch abort controller state exists');
+assert(app.includes('function predecodePage'), 'limited image predecode exists');
+assert(app.includes('function clearPredecodedPages'), 'predecode cleanup exists');
+assert(app.includes('state.prefetchController?.abort?.()'), 'prefetch aborts on reset');
+assert(app.includes('existing?.archive === archive'), 'page extraction/download is deduplicated');
+assert(app.includes("cache:'default'"), 'page manifests use browser cache');
+assert(app.includes('const canStage = Boolean(oldStages.length'), 'image staging swap exists');
+assert(app.includes("stage.style.visibility = 'hidden'"), 'staged images stay hidden until ready');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
