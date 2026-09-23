@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.17',
+  appVersion: '0.3.18',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -98,8 +98,8 @@ const state = {
   items: [], filter: 'all', source: 'all', category: '', search: '', sort: 'name', current: null, renderLimit: matchMedia('(max-width:850px)').matches ? 36 : 60,
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalLoaded: new Set(), verticalObserver: null,
-  verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: ''
+  verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfLoadingTask: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfPageUpgradeTimer: 0, pdfMaintenanceSeq: 0, pdfPageTurns: 0, pdfLastStagedPage: -1, largePending: null,
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: '', libraryRefreshTimer: 0, readerCleanupQueue: [], readerCleanupTimer: 0, readerCleanupIdle: 0, readerCleanupRunning: false
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -418,6 +418,44 @@ function schedulePdfNeighborWarmup() {
   else setTimeout(() => run(), 120);
 }
 
+function schedulePdfMaintenance(force = false) {
+  const profile = performanceProfile();
+  if (!state.pdfDoc || !profile.mobile || extType(state.current || {}) !== 'pdf') return;
+  const threshold = profile.memoryPressure ? 3 : (profile.eco ? 6 : 10);
+  if (!force && state.pdfPageTurns < threshold) return;
+
+  const doc = state.pdfDoc;
+  const seq = ++state.pdfMaintenanceSeq;
+  state.pdfPageTurns = 0;
+  const run = async () => {
+    if (seq !== state.pdfMaintenanceSeq || state.pdfDoc !== doc || state.pdfRenderTask || state.pdfVerticalTasks.size) return;
+    try { await doc.cleanup?.(); }
+    catch (error) { console.warn('Manutenção leve do PDF falhou:', error); }
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(() => run(), { timeout:1800 });
+  else setTimeout(run, 420);
+}
+function schedulePdfPageQualityUpgrade(index) {
+  clearTimeout(state.pdfPageUpgradeTimer);
+  const profile = performanceProfile();
+  if (!profile.mobile || profile.eco || profile.memoryPressure || pdfQualityMode() !== 'auto' || effectiveMode() !== 'page' || !state.pdfDoc) return;
+  const token = state.renderToken;
+  state.pdfPageUpgradeTimer = setTimeout(() => {
+    state.pdfPageUpgradeTimer = 0;
+    if (token !== state.renderToken || Number(index) !== Number(state.page) || !state.pdfDoc || effectiveMode() !== 'page') return;
+    const mount = $('#readerBody')?.querySelector(`[data-pdf-i="${index}"]`);
+    const canvas = mount?.querySelector('.pdf-page-canvas');
+    if (!mount || !canvas) return;
+    const target = pdfRenderCaps(false, index);
+    if (Number(canvas.dataset.renderDpr || 0) >= target.dprCap - .08) return;
+    const run = () => renderPdfInto(mount, index, token, false, false).catch(error => {
+      if (!isPdfRenderCancelled(error)) console.warn('Falha ao melhorar página PDF em repouso:', error);
+    });
+    if ('requestIdleCallback' in window) requestIdleCallback(run, { timeout:900 });
+    else run();
+  }, 320);
+}
+
 function scheduleReaderVisualRefresh() {
   if (state.displayRefreshRaf) return;
   state.displayRefreshRaf = requestAnimationFrame(() => {
@@ -480,10 +518,11 @@ function performanceProfile() {
   const effectiveEco = eco || hugeComic || memoryPressure;
   return {
     mode, mobile, smallMobile, constrained, saveData, slowConnection, eco: effectiveEco, quality, memoryPressure, heapRatio,
-    cacheLimit: memoryPressure ? 3 : (effectiveEco ? 4 : (smallMobile && !quality ? 5 : (mobile && !quality ? 7 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))))),
+    cacheLimit: memoryPressure ? 3 : (effectiveEco ? 4 : (smallMobile && !quality ? 4 : (mobile && !quality ? 5 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))))),
     pdfDpr: effectiveEco ? 1 : (smallMobile && !quality ? 1.1 : (mobile && !quality ? 1.3 : 2)),
     pdfPixelBudget: effectiveEco ? 3200000 : (smallMobile && !quality ? 4200000 : (mobile && !quality ? 5500000 : 12000000)),
     verticalWindow: effectiveEco ? 1 : (smallMobile && !quality ? 1 : (mobile && !quality ? 2 : 5)),
+    pdfVerticalWindow: effectiveEco ? 1 : (mobile && !quality ? 1 : 4),
     observerMargin: effectiveEco ? 320 : (smallMobile && !quality ? 440 : (mobile && !quality ? 620 : 1200)),
     prefetch: !effectiveEco && !memoryPressure && !slowConnection && document.visibilityState !== 'hidden',
     prefetchBothDirections: !mobile && !slowConnection
@@ -1577,6 +1616,23 @@ function updateLibraryStats() {
   $('#completedCount').textContent = completedTotal;
   updateOfflineStorageInfo();
 }
+function cancelScheduledLibraryRefresh() {
+  if (!state.libraryRefreshTimer) return;
+  clearTimeout(state.libraryRefreshTimer);
+  state.libraryRefreshTimer = 0;
+}
+function scheduleLibraryRefreshAfterReaderClose() {
+  cancelScheduledLibraryRefresh();
+  state.libraryRefreshTimer = setTimeout(() => {
+    state.libraryRefreshTimer = 0;
+    const refresh = () => {
+      if (!$('#reader')?.classList.contains('hidden')) return;
+      render();
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(refresh, { timeout:1200 });
+    else setTimeout(refresh, 40);
+  }, performanceProfile().mobile ? 900 : 500);
+}
 function render() {
   if (state.nextIssueCacheFor && !state.items.some(item => item.id === state.nextIssueCacheId)) { state.nextIssueCacheFor=''; state.nextIssueCacheId=''; }
   updateLibraryStats();
@@ -1718,6 +1774,8 @@ function updateReaderPrefsUI() {
 }
 
 async function openItem(item, forceLarge = false) {
+  // Evita que uma reconstrução tardia da biblioteca concorra com o clique atual.
+  cancelScheduledLibraryRefresh();
   item = await ensureOfflineItem(item);
   const type = extType(item);
   const warningLimit = archiveWarningLimitMB();
@@ -1736,7 +1794,8 @@ async function openItem(item, forceLarge = false) {
   flushProgressSave();
 
   const token = ++state.openToken;
-  await cleanupReaderData();
+  // A troca de documento não espera mais destroy()/GC do leitor anterior.
+  cleanupReaderData();
   if (token !== state.openToken) return;
   const readerWasHidden = $('#reader')?.classList.contains('hidden');
   state.current = item;
@@ -1902,6 +1961,7 @@ async function openPdf(item, token) {
       }
     }
     const task = pdfjs.getDocument(options);
+    state.pdfLoadingTask = task;
     task.onProgress = ({ loaded = 0, total = 0 } = {}) => {
       if (token !== state.openToken || $('#readerLoading').classList.contains('hidden')) return;
       if (total > 0) $('#loadingText').textContent = `Carregando PDF… ${Math.min(100, Math.round(loaded / total * 100))}%`;
@@ -1913,9 +1973,18 @@ async function openPdf(item, token) {
       if (password == null) { try { task.destroy?.(); } catch {} return; }
       updatePassword(password);
     };
-    state.pdfDoc = await task.promise;
-    if (token !== state.openToken) { await state.pdfDoc.destroy().catch(() => {}); state.pdfDoc = null; return; }
-    state.pages = Array.from({ length: state.pdfDoc.numPages }, (_, i) => ({ index: i, name: `Página ${i + 1}` }));
+
+    // Mantém o documento resolvido em variável local. Um PDF antigo nunca deve
+    // sobrescrever state.pdfDoc depois que outro livro já começou a abrir.
+    const pdfDoc = await task.promise;
+    if (state.pdfLoadingTask === task) state.pdfLoadingTask = null;
+    if (token !== state.openToken) {
+      queueReaderCleanup({ pdfDoc });
+      return;
+    }
+    state.pdfDoc = pdfDoc;
+    state.pdfPageTurns = 0;
+    state.pages = Array.from({ length: pdfDoc.numPages }, (_, i) => ({ index: i, name: `Página ${i + 1}` }));
     state.page = Math.max(0, Math.min(state.page, state.pages.length - 1));
     $('#pageRange').max = state.pages.length;
     $('#readerLoading').classList.add('hidden');
@@ -1924,6 +1993,7 @@ async function openPdf(item, token) {
     await renderReaderPages();
     schedulePdfNeighborWarmup();
   } catch (err) {
+    if (state.pdfLoadingTask && token !== state.openToken) state.pdfLoadingTask = null;
     if (token !== state.openToken || err?.name === 'AbortError') return;
     $('#readerLoading').classList.add('hidden');
     const noKeyHint = !item.localFile && !item.fileUrl && !getApiKey() ? ' Configure a Google Drive API Key para usar o leitor PDF próprio com arquivos do Drive.' : '';
@@ -2289,15 +2359,35 @@ function showReaderError(title, message, offerLocal = false) {
   $('#errorSettingsBtn')?.addEventListener('click', openSettings);
 }
 
-function releaseReaderVisuals() {
-  const root = $('#readerBody'); if (!root) return;
-  root.querySelectorAll('canvas').forEach(canvas => {
+function releaseReaderVisuals(root = $('#readerBody')) {
+  if (!root) return;
+  root.querySelectorAll?.('canvas').forEach(canvas => {
     try { canvas.width = 1; canvas.height = 1; } catch {}
   });
-  root.querySelectorAll('img').forEach(img => {
+  root.querySelectorAll?.('img').forEach(img => {
     img.onload = null; img.onerror = null;
     try { img.removeAttribute('src'); } catch {}
   });
+}
+function detachReaderVisualNodes() {
+  const root = $('#readerBody');
+  if (!root || !root.childNodes.length) return [];
+  const nodes = [...root.childNodes];
+  root.replaceChildren();
+  root.classList.remove('page-mode', 'pdf-stage-pending', 'is-zoomed');
+  return nodes;
+}
+function cleanupDetachedVisualNodes(nodes = []) {
+  for (const node of nodes) {
+    if (node?.nodeType !== 1) continue;
+    if (node.matches?.('canvas')) {
+      try { node.width = 1; node.height = 1; } catch {}
+    } else if (node.matches?.('img')) {
+      node.onload = null; node.onerror = null;
+      try { node.removeAttribute('src'); } catch {}
+    }
+    releaseReaderVisuals(node);
+  }
 }
 
 function isPdfRenderCancelled(error) {
@@ -2349,7 +2439,15 @@ async function renderPdfCanvasAttempt(page, viewport, dpr, vertical, index) {
   }
 }
 
-async function renderPdfInto(container, index, token, vertical = false) {
+function pdfRenderCapsForPass(vertical, index, fastPass = false) {
+  const caps = pdfRenderCapsForPass(vertical, index, fastPass);
+  if (!fastPass || !performanceProfile().mobile) return caps;
+  return {
+    dprCap: Math.min(caps.dprCap, 1.15),
+    pixelBudget: Math.min(caps.pixelBudget, 4400000)
+  };
+}
+async function renderPdfInto(container, index, token, vertical = false, fastPass = false) {
   if (!state.pdfDoc || token !== state.renderToken || !container?.isConnected) return;
   const page = await state.pdfDoc.getPage(index + 1);
   if (token !== state.renderToken || !container?.isConnected) return;
@@ -2454,8 +2552,13 @@ async function renderPdfPageMode(token) {
   $('#readerFooter').classList.remove('hidden');
   const spread = effectiveMode() === 'spread';
   const indexes = spread ? spreadIndexes() : [state.page];
+  const profile = performanceProfile();
+  const fastPass = Boolean(profile.mobile && !profile.eco && !profile.memoryPressure && pdfQualityMode() === 'auto' && !spread);
   const canStage = Boolean(
-    performanceProfile().mobile &&
+    profile.mobile &&
+    !profile.eco &&
+    !profile.memoryPressure &&
+    !profile.smallMobile &&
     !spread &&
     root?.querySelector(':scope > .page-stage .pdf-page-canvas') &&
     root?.classList.contains('page-mode')
@@ -2485,7 +2588,7 @@ async function renderPdfPageMode(token) {
   try {
     for (const i of indexes) {
       const mount = stage.querySelector(`[data-pdf-i="${i}"]`);
-      await renderPdfInto(mount, i, token, false);
+      await renderPdfInto(mount, i, token, false, fastPass);
       if (token !== state.renderToken) return;
     }
 
@@ -2513,7 +2616,10 @@ async function renderPdfPageMode(token) {
       stage.querySelectorAll('canvas').forEach(canvas => { try { canvas.width=1; canvas.height=1; } catch {} });
       stage.remove();
     }
-    if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
+    if (token === state.renderToken) {
+      $('#readerLoading').classList.add('hidden');
+      if (fastPass) schedulePdfPageQualityUpgrade(state.page);
+    }
   }
 }
 
@@ -2871,6 +2977,9 @@ async function renderReaderPages() {
 function setupVerticalObserver() {
   const root = $('#readerBody');
   const profile = performanceProfile();
+  const pdfVertical = extType(state.current || {}) === 'pdf';
+  const verticalWindow = pdfVertical ? profile.pdfVerticalWindow : profile.verticalWindow;
+  const observerMargin = pdfVertical && profile.mobile ? Math.min(profile.observerMargin, 360) : profile.observerMargin;
   let ticking = false;
 
   const update = () => {
@@ -2881,7 +2990,7 @@ function setupVerticalObserver() {
       updateVerticalPosition();
       cleanupVerticalSlots();
       if (!state.verticalObserver) {
-        const keep = Math.max(1, profile.verticalWindow + 1);
+        const keep = Math.max(1, verticalWindow + 1);
         for (let i=Math.max(0,state.page-keep); i<=Math.min(state.pages.length-1,state.page+keep); i++) {
           const slot = $(`.page-slot[data-i="${i}"]`);
           if (slot) loadVerticalSlot(slot).catch(() => {});
@@ -2893,11 +3002,11 @@ function setupVerticalObserver() {
   if ('IntersectionObserver' in window) {
     state.verticalObserver = new IntersectionObserver(entries => {
       for (const entry of entries) if (entry.isIntersecting) loadVerticalSlot(entry.target).catch(() => {});
-    }, { root, rootMargin:`${profile.observerMargin}px 0px`, threshold:.01 });
+    }, { root, rootMargin:`${observerMargin}px 0px`, threshold:.01 });
     $$('.page-slot').forEach(slot => state.verticalObserver.observe(slot));
   } else {
     state.verticalObserver = null;
-    const keep = Math.max(1, profile.verticalWindow + 1);
+    const keep = Math.max(1, verticalWindow + 1);
     for (let i=Math.max(0,state.page-keep); i<=Math.min(state.pages.length-1,state.page+keep); i++) {
       const slot = $(`.page-slot[data-i="${i}"]`);
       if (slot) loadVerticalSlot(slot).catch(() => {});
@@ -2949,7 +3058,7 @@ function cleanupVerticalSlots(force = false) {
   if (!isVerticalMode() || !state.pages.length || !state.verticalLoaded.size) return;
   const profile = performanceProfile();
   if (!force && !profile.mobile && !profile.eco && !profile.memoryPressure) return;
-  const keep = force ? 0 : profile.verticalWindow;
+  const keep = force ? 0 : (extType(state.current || {}) === 'pdf' ? profile.pdfVerticalWindow : profile.verticalWindow);
 
   for (const i of [...state.verticalLoaded]) {
     if (Math.abs(i - state.page) <= keep) continue;
@@ -3130,9 +3239,14 @@ async function setPage(n) {
     }
     resetPrefetchQueue();
     clearPredecodedPages(new Set([target]));
+    clearTimeout(state.pdfPageUpgradeTimer);
     await renderReaderPages();
     resetPagedScrollPosition();
-    if (extType(state.current || {}) === 'pdf') schedulePdfNeighborWarmup();
+    if (extType(state.current || {}) === 'pdf') {
+      state.pdfPageTurns++;
+      schedulePdfNeighborWarmup();
+      schedulePdfMaintenance();
+    }
     if (performanceProfile().mobile) { closeReaderControls(false); scheduleReaderChromeHide(1400); }
     if (requestId === state.pageSetSeq) state.flipDirection = '';
   } finally {
@@ -3143,54 +3257,145 @@ async function setPage(n) {
   }
 }
 
-async function cleanupReaderData() {
+function queueReaderCleanup(job = {}) {
+  const hasWork = Boolean(
+    job.pdfDoc || job.pdfLoadingTask || job.pdfObjectUrl ||
+    job.visualNodes?.length || job.pageUrls?.size || job.predecodedPages?.size
+  );
+  if (!hasWork) return;
+
+  // Cancela download/loading do PDF no próximo macrotask sem bloquear o clique atual.
+  if (job.pdfLoadingTask) {
+    const loadingTask = job.pdfLoadingTask;
+    job.pdfLoadingTask = null;
+    setTimeout(() => {
+      try { Promise.resolve(loadingTask.destroy?.()).catch(() => {}); } catch {}
+    }, 0);
+  }
+
+  state.readerCleanupQueue.push(job);
+  scheduleReaderCleanupDrain();
+}
+function scheduleReaderCleanupDrain() {
+  if (state.readerCleanupRunning || state.readerCleanupTimer || state.readerCleanupIdle || !state.readerCleanupQueue.length) return;
+  const delay = state.readerCleanupQueue.length > 2 ? 80 : 520;
+  state.readerCleanupTimer = setTimeout(() => {
+    state.readerCleanupTimer = 0;
+    const run = () => {
+      state.readerCleanupIdle = 0;
+      drainReaderCleanupQueue().catch(error => console.warn('Falha na limpeza de fundo do leitor:', error));
+    };
+    if ('requestIdleCallback' in window) state.readerCleanupIdle = requestIdleCallback(run, { timeout:1400 });
+    else run();
+  }, delay);
+}
+async function drainReaderCleanupQueue() {
+  if (state.readerCleanupRunning) return;
+  const job = state.readerCleanupQueue.shift();
+  if (!job) return;
+  state.readerCleanupRunning = true;
+  try {
+    cleanupDetachedVisualNodes(job.visualNodes || []);
+    for (const url of job.pageUrls?.values?.() || []) {
+      if (String(url).startsWith('blob:')) {
+        try { URL.revokeObjectURL(url); } catch {}
+      }
+    }
+    for (const img of job.predecodedPages?.values?.() || []) {
+      try { img.src = ''; } catch {}
+    }
+    if (job.pdfObjectUrl) {
+      try { URL.revokeObjectURL(job.pdfObjectUrl); } catch {}
+    }
+    if (job.pdfDoc) await job.pdfDoc.destroy?.().catch?.(() => {});
+  } finally {
+    state.readerCleanupRunning = false;
+    if (state.readerCleanupQueue.length) scheduleReaderCleanupDrain();
+  }
+}
+function cleanupReaderData() {
   closeThumbDrawer();
-  state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
+  state.thumbObserver?.disconnect?.();
+  state.thumbObserver = null;
   stopAutoScroll();
 
-  // Desanexa recursos compartilhados antes de qualquer await.
-  // Assim uma limpeza antiga nunca consegue zerar o PDF/HQ que acabou de ser aberto.
+  const visualNodes = detachReaderVisualNodes();
+
   const readerDownloadController = state.readerDownloadController;
   state.readerDownloadController = null;
   readerDownloadController?.abort();
 
-  stopVerticalObserver();
-  state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0; cancelAnimationFrame(state.displayRefreshRaf || 0); state.displayRefreshRaf = 0;
-  resetPrefetchQueue(); state.prefetchActive = 0; state.pagePending.clear(); clearPredecodedPages(); clearTimeout(state.verticalSaveTimer); clearTimeout(state.progressSaveTimer); state.progressSaveTimer = 0; state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
-  state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
+  const pdfLoadingTask = state.pdfLoadingTask;
+  state.pdfLoadingTask = null;
 
-  for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
-  state.pageUrls.clear(); state.pageUse.clear();
+  stopVerticalObserver();
+  state.renderToken++;
+  state.pageSetSeq++;
+  cancelAnimationFrame(state.imageZoomRaf || 0);
+  state.imageZoomRaf = 0;
+  cancelAnimationFrame(state.displayRefreshRaf || 0);
+  state.displayRefreshRaf = 0;
+
+  state.prefetchController?.abort?.();
+  state.prefetchController = new AbortController();
+  state.prefetchQueue = [];
+  state.prefetchQueued = new Set();
+  state.prefetchActive = 0;
+
+  const pageUrls = state.pageUrls;
+  state.pageUrls = new Map();
+  state.pageUse = new Map();
+  state.pagePending = new Map();
+
+  const predecodedPages = state.predecodedPages;
+  state.predecodedPages = new Map();
+
+  clearTimeout(state.verticalSaveTimer);
+  clearTimeout(state.progressSaveTimer);
+  clearTimeout(state.pdfVerticalUpgradeTimer);
+  clearTimeout(state.pdfPageUpgradeTimer);
+  state.progressSaveTimer = 0;
+  state.verticalSaveTimer = 0;
+  state.pdfVerticalUpgradeTimer = 0;
+  state.pdfPageUpgradeTimer = 0;
+  state.pageTransitioning = false;
+  state.pendingPageTarget = null;
+  state.touchStart = null;
+  state.flipDrag = null;
+  clearFlipDragPreview(false);
 
   const pdfObjectUrl = state.pdfObjectUrl;
   state.pdfObjectUrl = '';
-  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
 
   const pdfRenderTask = state.pdfRenderTask;
   state.pdfRenderTask = null;
   pdfRenderTask?.cancel?.();
 
-  const pdfVerticalTasks = [...state.pdfVerticalTasks.values()];
-  state.pdfVerticalTasks.clear();
-  for (const task of pdfVerticalTasks) task?.cancel?.();
+  const pdfVerticalTasks = state.pdfVerticalTasks;
+  state.pdfVerticalTasks = new Map();
+  for (const task of pdfVerticalTasks.values()) task?.cancel?.();
 
   const pdfDoc = state.pdfDoc;
   state.pdfDoc = null;
 
   state.pdfWarmupSeq++;
-  clearTimeout(state.pdfVerticalUpgradeTimer);
-  state.pdfVerticalUpgradeTimer = 0;
+  state.pdfMaintenanceSeq++;
+  state.pdfPageTurns = 0;
   state.pdfLastStagedPage = -1;
   clearPdfZoomPreview();
 
-  // Todo o estado do leitor antigo é zerado de forma síncrona.
-  // A partir daqui é seguro abrir outro documento mesmo que destroy() demore.
-  state.verticalLoaded.clear();
+  state.verticalLoaded = new Set();
   state.archive = null;
   state.pages = [];
-  $('#readerBody')?.classList.remove('page-mode');
 
-  if (pdfDoc) await pdfDoc.destroy().catch(() => {});
+  queueReaderCleanup({
+    visualNodes,
+    pageUrls,
+    predecodedPages,
+    pdfObjectUrl,
+    pdfLoadingTask,
+    pdfDoc
+  });
 }
 async function closeReader(fromHistory = false) {
   const triggeredByHistory = fromHistory === true;
@@ -3218,22 +3423,18 @@ async function closeReader(fromHistory = false) {
   reader.setAttribute('aria-hidden', 'true');
   reader.classList.remove('mobile-fullbleed','reader-chrome-hidden','controls-open');
   document.body.style.overflow = '';
-  releaseReaderVisuals();
-  $('#readerBody').innerHTML = '';
+  // A limpeza pesada foi desacoplada do fechamento. O DOM antigo é apenas
+  // desanexado agora e liberado depois, quando a thread principal estiver ociosa.
+  cleanupReaderData();
   state.current = null;
   state.verticalRestore = null;
-  render();
+  scheduleLibraryRefreshAfterReaderClose();
 
   // Remove a entrada artificial criada ao abrir o leitor sem navegar para outra página.
   if (shouldConsumeReaderHistory) {
     try { history.back(); } catch {}
   }
 
-  try {
-    await cleanupReaderData();
-  } catch (error) {
-    console.warn('Falha ao liberar recursos do leitor:', error);
-  }
 }
 
 window.addEventListener('popstate', () => {
