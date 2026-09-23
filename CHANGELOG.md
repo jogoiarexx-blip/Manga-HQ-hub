@@ -1,5 +1,15 @@
 # Changelog — Manga-HQ-hub
 
+## 0.3.23 — leitor vertical mobile resiliente
+
+- Define leitura vertical contínua como padrão no celular quando não existe preferência salva para a HQ.
+- Mantém uma janela de páginas próximas carregada e protege páginas visíveis contra limpeza prematura.
+- Adiciona recuperação automática para placeholders que ficam presos após cancelamento/limpeza.
+- Aumenta o pré-carregamento vertical de PDF no celular sem abandonar o modo econômico sob pressão de memória.
+- Ativa renderização inicial leve de PDF e posterior refinamento da página atual.
+- Corrige a recursão de `pdfRenderCapsForPass()`.
+- Atualiza o cache PWA para forçar a chegada do novo núcleo ao celular.
+
 ## 0.3.22 — Acervo Raro
 
 - Conecta o novo catálogo de 16 PDFs e capas WebP.
