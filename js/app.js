@@ -3816,13 +3816,13 @@ $('#importDataInput').addEventListener('change', async e => {
     for (const key of Object.keys(bookmarks)) delete bookmarks[key]; Object.assign(bookmarks, data.bookmarks || {});
     Object.assign(displayPrefs, data.displayPrefs || {});
     for (const key of Object.keys(itemReaderPrefs)) delete itemReaderPrefs[key]; Object.assign(itemReaderPrefs, data.itemReaderPrefs || {});
-    saveFav(); saveProgress(); savePrefs(); saveBookmarks(); saveDisplayPrefs(); saveItemReaderPrefs(); applyDisplayPrefs();
+    saveFav(); saveProgress(true); savePrefs(); saveBookmarks(); saveDisplayPrefs(); saveItemReaderPrefs(); applyDisplayPrefs();
     toast('Backup restaurado.'); closeSettings(); render();
   } catch { toast('Arquivo de backup inválido.'); }
 });
 $('#resetProgressBtn').addEventListener('click', () => {
   if (!confirm('Apagar todo o progresso de leitura? Os favoritos serão mantidos.')) return;
-  for (const key of Object.keys(progress)) delete progress[key]; saveProgress(); render(); toast('Progresso apagado.');
+  for (const key of Object.keys(progress)) delete progress[key]; saveProgress(true); render(); toast('Progresso apagado.');
 });
 
 let dragDepth = 0;
