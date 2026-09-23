@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.23',
+  appVersion: '0.3.24',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -4545,10 +4545,65 @@ window.addEventListener('dragover', e => { if ([...e.dataTransfer?.types || []].
 window.addEventListener('dragleave', e => { if (![...e.dataTransfer?.types || []].includes('Files')) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('#dropOverlay').classList.add('hidden'); });
 window.addEventListener('drop', async e => { e.preventDefault(); dragDepth = 0; $('#dropOverlay').classList.add('hidden'); const file = e.dataTransfer?.files?.[0]; if (file) await openLocalSelected(file); });
 
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; $('#installBtn').classList.remove('hidden'); });
-$('#installBtn').addEventListener('click', async () => {
-  if (!installPrompt) return; installPrompt.prompt(); await installPrompt.userChoice; installPrompt = null; $('#installBtn').classList.add('hidden');
+function isInstalledPwa() {
+  return Boolean(
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    window.navigator.standalone === true
+  );
+}
+function isIosDevice() {
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent || '') ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function refreshInstallButtons() {
+  const installed = isInstalledPwa();
+  for (const btn of [$('#installBtn'), $('#installCtaBtn')]) {
+    if (!btn) continue;
+    btn.classList.toggle('hidden', installed);
+    btn.disabled = installed;
+    btn.setAttribute('aria-hidden', installed ? 'true' : 'false');
+  }
+}
+async function requestAppInstall() {
+  if (isInstalledPwa()) {
+    toast('O Manga-HQ-hub já está instalado neste aparelho.');
+    refreshInstallButtons();
+    return;
+  }
+
+  if (installPrompt) {
+    const promptEvent = installPrompt;
+    installPrompt = null;
+    promptEvent.prompt();
+    const choice = await promptEvent.userChoice.catch(() => null);
+    if (choice?.outcome === 'accepted') toast('Instalação iniciada.');
+    else toast('Instalação cancelada. Você pode instalar depois pelo botão Instalar.');
+    refreshInstallButtons();
+    return;
+  }
+
+  if (isIosDevice()) {
+    toast('No iPhone/iPad: abra no Safari → Compartilhar → Adicionar à Tela de Início.');
+    return;
+  }
+
+  toast('No Android: abra o menu ⋮ do navegador e escolha “Instalar app” ou “Adicionar à tela inicial”.');
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  installPrompt = e;
+  refreshInstallButtons();
 });
+window.addEventListener('appinstalled', () => {
+  installPrompt = null;
+  refreshInstallButtons();
+  toast('Manga-HQ-hub instalado com sucesso.');
+});
+$('#installBtn')?.addEventListener('click', requestAppInstall);
+$('#installCtaBtn')?.addEventListener('click', requestAppInstall);
+window.matchMedia?.('(display-mode: standalone)')?.addEventListener?.('change', refreshInstallButtons);
+refreshInstallButtons();
 
 function releaseDistantPageCache() {
   if (!state.pages.length) return;
