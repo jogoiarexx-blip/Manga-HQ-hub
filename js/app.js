@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.20',
+  appVersion: '0.3.21',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -1354,6 +1354,10 @@ function featuredCollections(items = currentPool()) {
 }
 function renderCategoryChips() {
   const chipWrap=$('#categoryChips'); if (!chipWrap) return;
+  const section=$('#categoriesSection');
+  const showHomeCategories = !state.collection && !state.search && state.filter === 'all';
+  section?.classList.toggle('hidden', !showHomeCategories);
+  if (!showHomeCategories) { chipWrap.innerHTML=''; return; }
   const base=sourcePool(); const groups=categoryGroups(base).slice(0,12);
   chipWrap.innerHTML=[`<button class="chip ${!state.category?'active':''}" data-category="">Todos <span>${base.length}</span></button>`].concat(groups.map(g=>`<button class="chip ${state.category===g.key?'active':''}" data-category="${escapeHtml(g.key)}">${escapeHtml(g.label)} <span>${g.items.length}</span></button>`)).join('');
   $('#clearCategoryBtn')?.classList.toggle('hidden',!state.category);
@@ -1437,7 +1441,8 @@ function setupFeaturedCarousel() {
 }
 function renderFeaturedCarousel() {
   const host=$('#featuredCarousel'); if(!host) return;
-  const list=featuredCollections();
+  const browsingHome = !state.collection && !state.search && state.filter === 'all' && !state.category;
+  const list = browsingHome ? featuredCollections() : [];
   const section=$('#featuredSection');
   section?.classList.toggle('hidden', !list.length);
   state.featuredCarouselIndex = Math.min(state.featuredCarouselIndex, Math.max(0, list.length - 1));
@@ -1613,7 +1618,7 @@ function libraryStickyScrollOffset() {
   const topbar = $('.topbar');
   const sticky = $('#libraryStickyHead');
   const topbarHeight = Math.round(topbar?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 60 : 76));
-  const stickyHeight = Math.round(sticky?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 104 : 122));
+  const stickyHeight = Math.round(sticky?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 92 : 122));
   return Math.max(96, topbarHeight + stickyHeight + 14);
 }
 let libraryStickyResizeObserver = null;
