@@ -99,7 +99,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), pagePending: new Map(), predecodedPages: new Map(), verticalLoaded: new Set(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfLoadingTask: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfPageUpgradeTimer: 0, pdfMaintenanceSeq: 0, pdfPageTurns: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: '', libraryRefreshTimer: 0, readerCleanupQueue: [], readerCleanupTimer: 0, readerCleanupIdle: 0, readerCleanupRunning: false
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, readerHistoryClosing: false, readerHistoryReopenPending: false, readerHistorySettleTimer: 0, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, prefetchController: null, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0, progressSaveTimer: 0, progressDirty: false, nextIssueCacheFor: '', nextIssueCacheId: '', libraryRefreshTimer: 0, readerCleanupQueue: [], readerCleanupTimer: 0, readerCleanupIdle: 0, readerCleanupRunning: false
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -1800,10 +1800,13 @@ async function openItem(item, forceLarge = false) {
   const readerWasHidden = $('#reader')?.classList.contains('hidden');
   state.current = item;
   if (readerWasHidden && !state.readerHistoryActive) {
-    try {
-      history.pushState({ ...(history.state || {}), mhqrReader:true }, '', location.href);
-      state.readerHistoryActive = true;
-    } catch {}
+    if (state.readerHistoryClosing) {
+      // O history.back() do leitor anterior ainda está terminando.
+      // Abre o novo livro já, mas só cria a entrada dele quando o popstate antigo assentar.
+      state.readerHistoryReopenPending = true;
+    } else {
+      pushReaderHistoryEntry();
+    }
   }
   const savedReader = itemReaderPrefs[item.id] || {};
   state.page = progress[item.id]?.page || 0;
@@ -1930,6 +1933,7 @@ function prunePdfCoverCache() {
 }
 async function openPdf(item, token) {
   if (token !== state.openToken) return;
+  let loadingTask = null;
   $('#readerLoading').classList.remove('hidden');
   $('#loadingText').textContent = item.localFile ? 'Preparando PDF offline…' : 'Abrindo PDF no leitor…';
   $('#readerBody').innerHTML = '';
@@ -1961,6 +1965,7 @@ async function openPdf(item, token) {
       }
     }
     const task = pdfjs.getDocument(options);
+    loadingTask = task;
     state.pdfLoadingTask = task;
     task.onProgress = ({ loaded = 0, total = 0 } = {}) => {
       if (token !== state.openToken || $('#readerLoading').classList.contains('hidden')) return;
@@ -1993,7 +1998,7 @@ async function openPdf(item, token) {
     await renderReaderPages();
     schedulePdfNeighborWarmup();
   } catch (err) {
-    if (state.pdfLoadingTask && token !== state.openToken) state.pdfLoadingTask = null;
+    if (state.pdfLoadingTask === loadingTask) state.pdfLoadingTask = null;
     if (token !== state.openToken || err?.name === 'AbortError') return;
     $('#readerLoading').classList.add('hidden');
     const noKeyHint = !item.localFile && !item.fileUrl && !getApiKey() ? ' Configure a Google Drive API Key para usar o leitor PDF próprio com arquivos do Drive.' : '';
@@ -3307,7 +3312,7 @@ async function drainReaderCleanupQueue() {
     if (job.pdfObjectUrl) {
       try { URL.revokeObjectURL(job.pdfObjectUrl); } catch {}
     }
-    if (job.pdfDoc) await job.pdfDoc.destroy?.().catch?.(() => {});
+    if (job.pdfDoc) await Promise.resolve(job.pdfDoc.destroy?.()).catch(() => {});
   } finally {
     state.readerCleanupRunning = false;
     if (state.readerCleanupQueue.length) scheduleReaderCleanupDrain();
@@ -3397,6 +3402,30 @@ function cleanupReaderData() {
     pdfDoc
   });
 }
+function pushReaderHistoryEntry() {
+  try {
+    history.pushState({ ...(history.state || {}), mhqrReader:true }, '', location.href);
+    state.readerHistoryActive = true;
+    return true;
+  } catch {
+    state.readerHistoryActive = false;
+    return false;
+  }
+}
+function settleReaderHistoryClose() {
+  clearTimeout(state.readerHistorySettleTimer);
+  state.readerHistorySettleTimer = 0;
+  if (!state.readerHistoryClosing) return;
+  state.readerHistoryClosing = false;
+
+  if (state.readerHistoryReopenPending && !$('#reader')?.classList.contains('hidden')) {
+    state.readerHistoryReopenPending = false;
+    pushReaderHistoryEntry();
+  } else {
+    state.readerHistoryReopenPending = false;
+  }
+}
+
 async function closeReader(fromHistory = false) {
   const triggeredByHistory = fromHistory === true;
   const reader = $('#reader');
@@ -3432,12 +3461,22 @@ async function closeReader(fromHistory = false) {
 
   // Remove a entrada artificial criada ao abrir o leitor sem navegar para outra página.
   if (shouldConsumeReaderHistory) {
-    try { history.back(); } catch {}
+    state.readerHistoryClosing = true;
+    state.readerHistoryReopenPending = false;
+    clearTimeout(state.readerHistorySettleTimer);
+    try { history.back(); }
+    catch { settleReaderHistoryClose(); }
+    // Fallback para WebViews que não disparam popstate de forma confiável.
+    state.readerHistorySettleTimer = setTimeout(settleReaderHistoryClose, 900);
   }
 
 }
 
 window.addEventListener('popstate', () => {
+  if (state.readerHistoryClosing) {
+    settleReaderHistoryClose();
+    return;
+  }
   if (!$('#reader')?.classList.contains('hidden') && state.readerHistoryActive) {
     state.readerHistoryActive = false;
     closeReader(true).catch(() => {});
