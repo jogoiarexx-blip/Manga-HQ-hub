@@ -1,7 +1,8 @@
 const CATALOGS = [
   'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-1/catalogo.json',
   'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-2/catalogo.json',
-  'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/catalogo.json'
+  'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/catalogo.json',
+  'https://jogoiarexx-blip.github.io/Manga-HQ-Acervo-raro/catalogo.json'
 ];
 
 async function validateCatalog(CATALOG) {

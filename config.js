@@ -26,6 +26,13 @@ window.MHQR_CONFIG = {
       siteUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/',
       catalogUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-acervo-Marvel/catalogo.json',
       note: 'Acervo Marvel em PDF com capas WebP e leitura integrada pelo PDF.js.'
+    },
+    {
+      id: 'acervo-raro',
+      name: 'Manga HQ Acervo Raro',
+      siteUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-Acervo-raro/',
+      catalogUrl: 'https://jogoiarexx-blip.github.io/Manga-HQ-Acervo-raro/catalogo.json',
+      note: 'Histórias organizadas por coleção, com capas WebP e leitura integrada de PDF.'
     }
   ],
   driveApiKey: '',
