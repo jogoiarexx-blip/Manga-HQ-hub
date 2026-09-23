@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.22',
+  appVersion: '0.3.23',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -544,9 +544,9 @@ function performanceProfile() {
     cacheLimit: memoryPressure ? 3 : (effectiveEco ? 4 : (smallMobile && !quality ? 4 : (mobile && !quality ? 5 : Math.max(8, Number(CONFIG.pageCacheLimit || 12))))),
     pdfDpr: effectiveEco ? 1 : (smallMobile && !quality ? 1.1 : (mobile && !quality ? 1.3 : 2)),
     pdfPixelBudget: effectiveEco ? 3200000 : (smallMobile && !quality ? 4200000 : (mobile && !quality ? 5500000 : 12000000)),
-    verticalWindow: effectiveEco ? 1 : (smallMobile && !quality ? 1 : (mobile && !quality ? 2 : 5)),
-    pdfVerticalWindow: effectiveEco ? 1 : (mobile && !quality ? 1 : 4),
-    observerMargin: effectiveEco ? 320 : (smallMobile && !quality ? 440 : (mobile && !quality ? 620 : 1200)),
+    verticalWindow: memoryPressure ? 1 : (effectiveEco ? 1 : (mobile && !quality ? 2 : 5)),
+    pdfVerticalWindow: memoryPressure ? 1 : (effectiveEco ? 1 : (mobile && !quality ? 2 : 4)),
+    observerMargin: effectiveEco ? 420 : (smallMobile && !quality ? 640 : (mobile && !quality ? 820 : 1200)),
     prefetch: !effectiveEco && !memoryPressure && !slowConnection && document.visibilityState !== 'hidden',
     prefetchBothDirections: !mobile && !slowConnection
   };
@@ -2020,7 +2020,9 @@ async function openItem(item, forceLarge = false) {
   state.verticalRestore = { page:state.page, ratio:Number(progress[item.id]?.verticalOffsetRatio || 0) };
   const hasSavedReaderMode = Boolean(progress[item.id]?.mode || savedReader.mode);
   state.mode = normalizedMode(progress[item.id]?.mode || savedReader.mode || prefs.defaultMode);
-  if (type === 'pdf' && performanceProfile().mobile && matchMedia('(orientation:portrait)').matches && !hasSavedReaderMode) state.mode = 'page';
+  // No celular, a experiência padrão passa a ser rolagem vertical contínua.
+  // Uma escolha já salva para esta HQ continua sendo respeitada.
+  if (performanceProfile().mobile && !hasSavedReaderMode) state.mode = 'vertical';
   state.direction = progress[item.id]?.direction || savedReader.direction || prefs.direction || 'ltr';
   state.fit = ['contain','width','height'].includes(savedReader.fit) ? savedReader.fit : 'contain';
   state.trimMargins = Boolean(savedReader.trimMargins);
@@ -2652,7 +2654,7 @@ async function renderPdfCanvasAttempt(page, viewport, dpr, vertical, index) {
 }
 
 function pdfRenderCapsForPass(vertical, index, fastPass = false) {
-  const caps = pdfRenderCapsForPass(vertical, index, fastPass);
+  const caps = pdfRenderCaps(vertical, index);
   if (!fastPass || !performanceProfile().mobile) return caps;
   return {
     dprCap: Math.min(caps.dprCap, 1.15),
@@ -2685,7 +2687,7 @@ async function renderPdfInto(container, index, token, vertical = false, fastPass
   scale = Math.max(.25, Math.min(4, scale * (vertical ? mobileScale : state.zoom * mobileScale)));
 
   const viewport = page.getViewport({ scale });
-  const caps = pdfRenderCaps(vertical, index);
+  const caps = pdfRenderCapsForPass(vertical, index, fastPass);
   let dpr = Math.min(caps.dprCap, window.devicePixelRatio || 1);
 
   const estimatedPixels = viewport.width * viewport.height * dpr * dpr;
@@ -2841,7 +2843,11 @@ async function renderPdfVerticalMode(token) {
   $('#readerBody').classList.remove('page-mode');
   $('#readerBody').innerHTML = `<div class="vertical-pages pdf-vertical ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot pdf-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
   setupVerticalObserver();
-  requestAnimationFrame(() => { restoreVerticalPosition(true); schedulePdfVerticalQualityUpgrade(state.page); });
+  requestAnimationFrame(() => {
+    restoreVerticalPosition(true);
+    ensureVerticalWindowLoaded();
+    schedulePdfVerticalQualityUpgrade(state.page);
+  });
 }
 
 async function getPageUrl(index, expectedToken = state.renderToken) {
@@ -3105,7 +3111,10 @@ async function renderReaderPages() {
     $('#readerBody').classList.remove('page-mode');
     $('#readerBody').innerHTML = `<div class="vertical-pages ${state.mode === 'webtoon' ? 'webtoon-pages' : ''}">${state.pages.map((_, i) => `<div class="page-slot" data-i="${i}"><span class="page-placeholder">Página ${i + 1}</span></div>`).join('')}</div>`;
     setupVerticalObserver();
-    requestAnimationFrame(() => restoreVerticalPosition(true));
+    requestAnimationFrame(() => {
+      restoreVerticalPosition(true);
+      ensureVerticalWindowLoaded();
+    });
   } else {
     $('#readerFooter').classList.remove('hidden');
     const root = $('#readerBody');
@@ -3186,12 +3195,102 @@ async function renderReaderPages() {
   updateProgress(); updatePageControls(); scheduleReaderVisualRefresh(); releaseReaderMemoryIfNeeded();
 }
 
+function verticalSlotNearViewport(slot, margin = 0) {
+  const root = $('#readerBody');
+  if (!root || !slot?.isConnected || !root.contains(slot)) return false;
+  const rr = root.getBoundingClientRect();
+  const sr = slot.getBoundingClientRect();
+  const extra = Math.max(0, Number(margin) || 0);
+  return sr.bottom >= rr.top - extra && sr.top <= rr.bottom + extra;
+}
+
+function scheduleVerticalSlotRecovery(slot, delay = 700) {
+  if (!slot?.isConnected || slot.dataset.recoveryScheduled === '1') return;
+  slot.dataset.recoveryScheduled = '1';
+  setTimeout(() => {
+    if (!slot?.isConnected) return;
+    slot.dataset.recoveryScheduled = '';
+    const i = Number(slot.dataset.i);
+    if (!Number.isFinite(i) || !verticalSlotNearViewport(slot, Math.min(520, innerHeight * .7))) return;
+
+    const canvas = slot.querySelector('.pdf-page-canvas');
+    const img = slot.querySelector('img');
+    const imageReady = Boolean(img?.complete && img.naturalWidth > 0);
+    if (canvas || imageReady || state.pdfVerticalTasks.has(i)) {
+      slot.dataset.recoveryAttempts = '';
+      return;
+    }
+
+    const attempts = Number(slot.dataset.recoveryAttempts || 0);
+    if (img && !img.complete && slot.dataset.loading === '1' && attempts < 3) {
+      slot.dataset.recoveryAttempts = String(attempts + 1);
+      scheduleVerticalSlotRecovery(slot, 900);
+      return;
+    }
+
+    slot.dataset.loaded = '';
+    slot.dataset.loading = '';
+    slot.dataset.recoveryAttempts = '';
+    state.verticalLoaded.delete(i);
+    loadVerticalSlot(slot).catch(() => {});
+  }, Math.max(120, Number(delay) || 700));
+}
+
+function ensureVerticalWindowLoaded(center = state.page) {
+  if (!isVerticalMode() || !state.pages.length) return;
+  const root = $('#readerBody');
+  if (!root) return;
+
+  const profile = performanceProfile();
+  const pdfVertical = extType(state.current || {}) === 'pdf';
+  const keep = Math.max(1, pdfVertical ? profile.pdfVerticalWindow : profile.verticalWindow);
+  const safeCenter = Math.max(0, Math.min(state.pages.length - 1, Number(center) || 0));
+  const indexes = new Set();
+
+  for (let i = Math.max(0, safeCenter - keep); i <= Math.min(state.pages.length - 1, safeCenter + keep); i++) {
+    indexes.add(i);
+  }
+
+  const rr = root.getBoundingClientRect();
+  const probeX = Math.max(rr.left + 2, Math.min(rr.right - 2, rr.left + rr.width * .5));
+  for (const probeY of [rr.top + 4, rr.top + rr.height * .5, rr.bottom - 4]) {
+    const slot = document.elementFromPoint(probeX, probeY)?.closest?.('.page-slot');
+    if (!slot || !root.contains(slot)) continue;
+    const i = Number(slot.dataset.i);
+    if (!Number.isFinite(i)) continue;
+    for (let n = Math.max(0, i - 1); n <= Math.min(state.pages.length - 1, i + 1); n++) indexes.add(n);
+  }
+
+  for (const i of indexes) {
+    const slot = root.querySelector(`.page-slot[data-i="${i}"]`);
+    if (!slot) continue;
+    const canvas = slot.querySelector('.pdf-page-canvas');
+    const img = slot.querySelector('img');
+    const ready = Boolean(canvas || (img?.complete && img.naturalWidth > 0));
+    if (ready) {
+      slot.dataset.loaded = '1';
+      slot.dataset.loading = '';
+      slot.dataset.recoveryAttempts = '';
+      state.verticalLoaded.add(i);
+      continue;
+    }
+    if (slot.dataset.loading === '1') {
+      scheduleVerticalSlotRecovery(slot);
+      continue;
+    }
+    if (slot.dataset.loaded === '1') slot.dataset.loaded = '';
+    loadVerticalSlot(slot).catch(() => {});
+  }
+}
+
 function setupVerticalObserver() {
   const root = $('#readerBody');
   const profile = performanceProfile();
   const pdfVertical = extType(state.current || {}) === 'pdf';
   const verticalWindow = pdfVertical ? profile.pdfVerticalWindow : profile.verticalWindow;
-  const observerMargin = pdfVertical && profile.mobile ? Math.min(profile.observerMargin, 360) : profile.observerMargin;
+  const observerMargin = pdfVertical && profile.mobile
+    ? Math.min(profile.observerMargin, profile.smallMobile ? 640 : 820)
+    : profile.observerMargin;
   let ticking = false;
 
   const update = () => {
@@ -3200,6 +3299,7 @@ function setupVerticalObserver() {
     requestAnimationFrame(() => {
       ticking = false;
       updateVerticalPosition();
+      ensureVerticalWindowLoaded();
       cleanupVerticalSlots();
       if (!state.verticalObserver) {
         const keep = Math.max(1, verticalWindow + 1);
@@ -3213,36 +3313,88 @@ function setupVerticalObserver() {
 
   if ('IntersectionObserver' in window) {
     state.verticalObserver = new IntersectionObserver(entries => {
-      for (const entry of entries) if (entry.isIntersecting) loadVerticalSlot(entry.target).catch(() => {});
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        loadVerticalSlot(entry.target).catch(() => {});
+        scheduleVerticalSlotRecovery(entry.target);
+      }
     }, { root, rootMargin:`${observerMargin}px 0px`, threshold:.01 });
     $$('.page-slot').forEach(slot => state.verticalObserver.observe(slot));
   } else {
     state.verticalObserver = null;
-    const keep = Math.max(1, verticalWindow + 1);
-    for (let i=Math.max(0,state.page-keep); i<=Math.min(state.pages.length-1,state.page+keep); i++) {
-      const slot = $(`.page-slot[data-i="${i}"]`);
-      if (slot) loadVerticalSlot(slot).catch(() => {});
-    }
   }
 
   state.verticalScrollHandler = update;
   root.addEventListener('scroll', update, { passive:true });
+  ensureVerticalWindowLoaded();
 }
 
+
 async function loadVerticalSlot(slot) {
-  if (!slot?.isConnected || slot.dataset.loaded === '1') return;
+  if (!slot?.isConnected || slot.dataset.loaded === '1' || slot.dataset.loading === '1') return;
   const i = Number(slot.dataset.i);
+  if (!Number.isFinite(i)) return;
+
+  const token = state.renderToken;
   slot.dataset.loaded = '1';
+  slot.dataset.loading = '1';
+  slot.dataset.recoveryAttempts = '';
   state.verticalLoaded.add(i);
+  scheduleVerticalSlotRecovery(slot);
+
   try {
     if (extType(state.current || {}) === 'pdf' && state.pdfDoc) {
-      await renderPdfInto(slot, i, state.renderToken, true);
+      await renderPdfInto(slot, i, token, true, performanceProfile().mobile);
+      if (token !== state.renderToken || !slot.isConnected) return;
+
+      if (slot.querySelector('.pdf-page-canvas')) {
+        slot.dataset.loaded = '1';
+        slot.dataset.loading = '';
+        slot.dataset.recoveryAttempts = '';
+        if (i === state.page) schedulePdfVerticalQualityUpgrade(i);
+      } else {
+        slot.dataset.loaded = '';
+        slot.dataset.loading = '';
+        state.verticalLoaded.delete(i);
+        scheduleVerticalSlotRecovery(slot, 180);
+      }
       return;
     }
-    const url = await getPageUrl(i);
-    if (!slot.isConnected) return;
-    const img = new Image(); img.alt = `Página ${i + 1}`; img.loading = 'lazy'; img.decoding = 'async'; img.fetchPriority = 'low'; img.src = url;
-    img.onload = () => { if (img.naturalWidth && img.naturalHeight) { slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`; slot.style.minHeight = '0'; if (state.pages[i]) { state.pages[i].width = img.naturalWidth; state.pages[i].height = img.naturalHeight; } } applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight); const scale=applyMobileReadingScaleToSlot(slot, i, img.naturalWidth, img.naturalHeight); img.dataset.mobileBaseScale=String(scale); img.classList.toggle('mobile-reading-enlarged',scale>1.01); scheduleReaderVisualRefresh(); if (i === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); };
+
+    const url = await getPageUrl(i, token);
+    if (token !== state.renderToken || !slot.isConnected) return;
+
+    const img = new Image();
+    img.alt = `Página ${i + 1}`;
+    img.loading = 'eager';
+    img.decoding = 'async';
+    img.fetchPriority = Math.abs(i - state.page) <= 1 ? 'high' : 'low';
+    img.src = url;
+
+    img.onload = () => {
+      if (!slot.isConnected) return;
+      slot.dataset.loaded = '1';
+      slot.dataset.loading = '';
+      slot.dataset.recoveryAttempts = '';
+      if (img.naturalWidth && img.naturalHeight) {
+        slot.style.aspectRatio = `${img.naturalWidth}/${img.naturalHeight}`;
+        slot.style.minHeight = '0';
+        if (state.pages[i]) {
+          state.pages[i].width = img.naturalWidth;
+          state.pages[i].height = img.naturalHeight;
+        }
+      }
+      applyLowResFilterToElement(img, i, img.naturalWidth, img.naturalHeight);
+      const scale = applyMobileReadingScaleToSlot(slot, i, img.naturalWidth, img.naturalHeight);
+      img.dataset.mobileBaseScale = String(scale);
+      img.classList.toggle('mobile-reading-enlarged', scale > 1.01);
+      scheduleReaderVisualRefresh();
+      if (i === state.page) requestAnimationFrame(() => {
+        if (state.verticalRestore) restoreVerticalPosition(true);
+        alignMobileReadingX();
+      });
+    };
+
     img.onerror = () => {
       const entry = state.archive?.entries?.[i];
       if (state.archive?.type === 'drive-pages' && entry?.id) {
@@ -3252,42 +3404,67 @@ async function loadVerticalSlot(slot) {
         if (next < urls.length) {
           img.dataset.driveFallbackIndex = String(next);
           img.src = urls[next];
+          scheduleVerticalSlotRecovery(slot, 900);
           return;
         }
       }
-      slot.dataset.loaded = ''; state.verticalLoaded.delete(i);
+      slot.dataset.loaded = '';
+      slot.dataset.loading = '';
+      slot.dataset.recoveryAttempts = '';
+      state.verticalLoaded.delete(i);
       slot.innerHTML = `<div class="page-load-error"><strong>Falha ao carregar a página ${i + 1}</strong><span>Confira o compartilhamento público do Drive ou configure uma API Key.</span><div><button data-retry-page="${i}">↻ Tentar novamente</button><button data-drive-page-settings>⚙ Configurar Drive</button></div></div>`;
     };
-    slot.innerHTML = ''; slot.appendChild(img);
+
+    slot.innerHTML = '';
+    slot.appendChild(img);
   } catch (err) {
-    slot.dataset.loaded = ''; state.verticalLoaded.delete(i);
-    if (slot.isConnected) slot.innerHTML = `<button class="page-retry" data-retry-page="${i}">↻ Tentar página ${i + 1} novamente</button>`;
+    if (token !== state.renderToken || !slot?.isConnected) return;
+    slot.dataset.loaded = '';
+    slot.dataset.loading = '';
+    slot.dataset.recoveryAttempts = '';
+    state.verticalLoaded.delete(i);
+    slot.innerHTML = `<button class="page-retry" data-retry-page="${i}">↻ Tentar página ${i + 1} novamente</button>`;
   }
 }
+
 
 
 function cleanupVerticalSlots(force = false) {
   if (!isVerticalMode() || !state.pages.length || !state.verticalLoaded.size) return;
   const profile = performanceProfile();
   if (!force && !profile.mobile && !profile.eco && !profile.memoryPressure) return;
+
+  const root = $('#readerBody');
   const keep = force ? 0 : (extType(state.current || {}) === 'pdf' ? profile.pdfVerticalWindow : profile.verticalWindow);
+  const visibleMargin = force ? 0 : (profile.mobile
+    ? Math.min(560, Math.max(240, Number(root?.clientHeight || innerHeight) * .58))
+    : 220);
 
   for (const i of [...state.verticalLoaded]) {
-    if (Math.abs(i - state.page) <= keep) continue;
     const slot = $(`.page-slot[data-i="${i}"]`);
-    state.pdfVerticalTasks.get(i)?.cancel?.(); state.pdfVerticalTasks.delete(i);
+    if (!force && (Math.abs(i - state.page) <= keep || verticalSlotNearViewport(slot, visibleMargin))) continue;
+
+    state.pdfVerticalTasks.get(i)?.cancel?.();
+    state.pdfVerticalTasks.delete(i);
     state.verticalLoaded.delete(i);
+
     if (slot) {
       slot.dataset.loaded = '';
+      slot.dataset.loading = '';
+      slot.dataset.recoveryScheduled = '';
+      slot.dataset.recoveryAttempts = '';
       slot.innerHTML = `<span class="page-placeholder">Página ${i + 1}</span>`;
     }
+
     if (extType(state.current || {}) !== 'pdf' && state.pageUrls.has(i)) {
       const cachedUrl = state.pageUrls.get(i);
       if (String(cachedUrl).startsWith('blob:')) URL.revokeObjectURL(cachedUrl);
-      state.pageUrls.delete(i); state.pageUse.delete(i);
+      state.pageUrls.delete(i);
+      state.pageUse.delete(i);
     }
   }
 }
+
 
 function currentVerticalOffsetRatio() {
   if (!isVerticalMode() || !state.pages.length) return 0;
