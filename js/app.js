@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.15',
+  appVersion: '0.3.16',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -3155,21 +3155,46 @@ async function cleanupReaderData() {
   state.verticalLoaded.clear(); state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
 }
 async function closeReader(fromHistory = false) {
-  const shouldGoBack = !fromHistory && state.readerHistoryActive && history.state?.mhqrReader;
+  const triggeredByHistory = fromHistory === true;
+  const reader = $('#reader');
+  if (!reader || reader.classList.contains('hidden')) {
+    state.readerHistoryActive = false;
+    return;
+  }
+
+  const shouldConsumeReaderHistory = !triggeredByHistory && state.readerHistoryActive && history.state?.mhqrReader;
   state.readerHistoryActive = false;
-  closeReaderControls();
+
+  closeReaderControls(false);
   $('#readerDisplayPanel')?.classList.add('hidden');
   setImmersive(false);
   if (isVerticalMode()) { updateVerticalPosition(); updateProgress(); }
   flushProgressSave();
   state.openToken++;
-  await cleanupReaderData();
-  clearReaderChromeTimer(); clearTimeout(readerControlsTimer);
-  $('#reader').classList.add('hidden'); $('#reader').setAttribute('aria-hidden', 'true'); $('#reader')?.classList.remove('mobile-fullbleed','reader-chrome-hidden');
-  document.body.style.overflow = ''; state.current = null; state.verticalRestore = null; $('#readerBody').innerHTML = ''; render();
 
-  if (shouldGoBack) {
+  // Fecha visualmente primeiro. PDFs grandes podem demorar para destruir worker/canvas;
+  // o usuário não deve ficar preso esperando essa limpeza terminar.
+  clearReaderChromeTimer();
+  clearTimeout(readerControlsTimer);
+  reader.classList.add('hidden');
+  reader.setAttribute('aria-hidden', 'true');
+  reader.classList.remove('mobile-fullbleed','reader-chrome-hidden','controls-open');
+  document.body.style.overflow = '';
+  releaseReaderVisuals();
+  $('#readerBody').innerHTML = '';
+  state.current = null;
+  state.verticalRestore = null;
+  render();
+
+  // Remove a entrada artificial criada ao abrir o leitor sem navegar para outra página.
+  if (shouldConsumeReaderHistory) {
     try { history.back(); } catch {}
+  }
+
+  try {
+    await cleanupReaderData();
+  } catch (error) {
+    console.warn('Falha ao liberar recursos do leitor:', error);
   }
 }
 
@@ -3427,7 +3452,11 @@ function toggleReaderControls() {
 $('#readerMenuBtn')?.addEventListener('click', e => { e.stopPropagation(); toggleReaderControls(); });
 $('.reader-controls')?.addEventListener('click', keepReaderControlsAlive);
 
-$('#closeReader').addEventListener('click', closeReader);
+$('#closeReader').addEventListener('click', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  closeReader(false).catch(error => console.warn('Falha ao sair do leitor:', error));
+});
 $('#downloadCurrentBtn').addEventListener('click', () => downloadItem(state.current));
 $('#offlineCurrentBtn').addEventListener('click', async () => { if (state.current) { await toggleOfflineItem(state.current); updateOfflineCurrentButton(); } });
 $('#clearOfflineBtn').addEventListener('click', clearOfflineLibrary);
@@ -3596,7 +3625,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.target?.matches?.('input,select,textarea,[contenteditable="true"]')) return;
   if ($('#reader').classList.contains('hidden')) return;
-  if (e.key === 'Escape') { closeReader(); return; }
+  if (e.key === 'Escape') { closeReader(false); return; }
   if (isPagedMode() && ['ArrowRight','ArrowLeft','PageDown','PageUp','Home','End'].includes(e.key)) e.preventDefault();
   if (isPagedMode() && e.key === 'ArrowRight') setPage(state.direction === 'rtl' ? prevPageIndex() : nextPageIndex());
   if (isPagedMode() && e.key === 'ArrowLeft') setPage(state.direction === 'rtl' ? nextPageIndex() : prevPageIndex());
@@ -3800,7 +3829,7 @@ $('#readerBody').addEventListener('touchend', e => {
 }, { passive: true });
 
 function exportReaderData() {
-  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.15', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
+  const data = { app: 'Manga-HQ-hub', version: CONFIG.appVersion || '0.3.16', exportedAt: new Date().toISOString(), favorites: [...favorites], progress, prefs, bookmarks, displayPrefs, itemReaderPrefs };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'manga-hq-hub-backup.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
