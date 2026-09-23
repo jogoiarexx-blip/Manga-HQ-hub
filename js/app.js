@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.16',
+  appVersion: '0.3.17',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -1727,6 +1727,14 @@ async function openItem(item, forceLarge = false) {
     $('#largeFileModal').classList.remove('hidden');
     return;
   }
+  // Antes de trocar de HQ, captura e grava imediatamente a posição da edição atual.
+  // Isso evita perder o último avanço quando a limpeza cancela timers pendentes.
+  if (state.current && state.pages.length) {
+    if (isVerticalMode()) updateVerticalPosition();
+    updateProgress();
+  }
+  flushProgressSave();
+
   const token = ++state.openToken;
   await cleanupReaderData();
   if (token !== state.openToken) return;
@@ -2263,7 +2271,6 @@ function openThumbDrawer() {
 function closeThumbDrawer() {
   state.thumbRenderToken++;
   state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
-  if (state.thumbScrollHandler) $('#thumbDrawer')?.removeEventListener('scroll', state.thumbScrollHandler); state.thumbScrollHandler = null;
   if (state.thumbScrollHandler) $('#thumbDrawer')?.removeEventListener('scroll', state.thumbScrollHandler);
   state.thumbScrollHandler = null;
   state.thumbQueue = []; state.thumbActive = 0;
@@ -3140,19 +3147,50 @@ async function cleanupReaderData() {
   closeThumbDrawer();
   state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
   stopAutoScroll();
-  state.readerDownloadController?.abort();
+
+  // Desanexa recursos compartilhados antes de qualquer await.
+  // Assim uma limpeza antiga nunca consegue zerar o PDF/HQ que acabou de ser aberto.
+  const readerDownloadController = state.readerDownloadController;
   state.readerDownloadController = null;
+  readerDownloadController?.abort();
+
   stopVerticalObserver();
   state.renderToken++; state.pageSetSeq++; cancelAnimationFrame(state.imageZoomRaf || 0); state.imageZoomRaf = 0; cancelAnimationFrame(state.displayRefreshRaf || 0); state.displayRefreshRaf = 0;
   resetPrefetchQueue(); state.prefetchActive = 0; state.pagePending.clear(); clearPredecodedPages(); clearTimeout(state.verticalSaveTimer); clearTimeout(state.progressSaveTimer); state.progressSaveTimer = 0; state.verticalSaveTimer = 0; state.pageTransitioning = false; state.pendingPageTarget = null;
   state.touchStart = null; state.flipDrag = null; clearFlipDragPreview(false);
+
   for (const url of state.pageUrls.values()) if (String(url).startsWith('blob:')) URL.revokeObjectURL(url);
   state.pageUrls.clear(); state.pageUse.clear();
-  if (state.pdfObjectUrl) { URL.revokeObjectURL(state.pdfObjectUrl); state.pdfObjectUrl = ''; }
-  state.pdfRenderTask?.cancel?.(); state.pdfRenderTask = null;
-  for (const task of state.pdfVerticalTasks.values()) task?.cancel?.(); state.pdfVerticalTasks.clear(); state.pdfWarmupSeq++; clearTimeout(state.pdfVerticalUpgradeTimer); state.pdfVerticalUpgradeTimer=0; state.pdfLastStagedPage=-1; clearPdfZoomPreview();
-  if (state.pdfDoc) { await state.pdfDoc.destroy().catch(() => {}); state.pdfDoc = null; }
-  state.verticalLoaded.clear(); state.archive = null; state.pages = []; $('#readerBody')?.classList.remove('page-mode');
+
+  const pdfObjectUrl = state.pdfObjectUrl;
+  state.pdfObjectUrl = '';
+  if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
+
+  const pdfRenderTask = state.pdfRenderTask;
+  state.pdfRenderTask = null;
+  pdfRenderTask?.cancel?.();
+
+  const pdfVerticalTasks = [...state.pdfVerticalTasks.values()];
+  state.pdfVerticalTasks.clear();
+  for (const task of pdfVerticalTasks) task?.cancel?.();
+
+  const pdfDoc = state.pdfDoc;
+  state.pdfDoc = null;
+
+  state.pdfWarmupSeq++;
+  clearTimeout(state.pdfVerticalUpgradeTimer);
+  state.pdfVerticalUpgradeTimer = 0;
+  state.pdfLastStagedPage = -1;
+  clearPdfZoomPreview();
+
+  // Todo o estado do leitor antigo é zerado de forma síncrona.
+  // A partir daqui é seguro abrir outro documento mesmo que destroy() demore.
+  state.verticalLoaded.clear();
+  state.archive = null;
+  state.pages = [];
+  $('#readerBody')?.classList.remove('page-mode');
+
+  if (pdfDoc) await pdfDoc.destroy().catch(() => {});
 }
 async function closeReader(fromHistory = false) {
   const triggeredByHistory = fromHistory === true;
