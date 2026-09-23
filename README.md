@@ -1,97 +1,76 @@
-# Manga-HQ-hub v0.3.13
+# Manga-HQ-hub v0.3.14
 
-Leitor/PWA de mangás e HQs otimizado para abrir mais rápido e usar menos memória, principalmente no celular.
+Leitor/PWA de mangás e HQs com núcleo otimizado para reduzir trabalho repetido, abrir páginas mais rápido e manter o uso de memória controlado.
 
-## v0.3.13 — núcleo do leitor mais leve
+## v0.3.14 — deduplicação e troca de página mais rápida
 
-### Motores sob demanda
+### Uma página, um trabalho
 
-PDF.js, JSZip e UnRAR deixaram de ser baixados antecipadamente na instalação do PWA.
+O leitor agora mantém um mapa de operações de página em andamento.
 
-Agora:
-- WebP não carrega motor de PDF/CBR/CBZ;
-- PDF.js só é importado quando um PDF é aberto;
-- JSZip só entra ao abrir CBZ/ZIP;
-- UnRAR + WASM só entram ao abrir CBR/RAR;
-- depois do primeiro uso, o Service Worker pode reutilizar os arquivos do cache.
+Se a mesma página for pedida ao mesmo tempo por:
+- leitor normal;
+- Vertical/Webtoon;
+- prefetch;
+- mudança rápida de página,
 
-Isso reduz rede, CPU e disputa com o carregamento do catálogo.
+a extração/download é compartilhada em vez de começar de novo.
 
-### Fallback de compatibilidade
+Isso ajuda principalmente em **CBZ/CBR**, onde extrair a mesma imagem duas vezes desperdiçava CPU e RAM.
 
-- PDF.js tenta `esm.sh` e possui fallback no jsDelivr.
-- JSZip possui fallback no jsDelivr.
-- UnRAR possui fallback no jsDelivr.
-- Promises de módulos que falham são resetadas, permitindo tentar novamente sem recarregar a página.
+### Predecode limitado
 
-### PDF mais robusto
+Quando o aparelho permite:
+- celular mantém no máximo **1 página futura decodificada**;
+- desktop mantém no máximo **2**;
+- Econômico, memória pressionada e conexão limitada desativam esse comportamento.
 
-Se uma página PDF falhar ao criar/renderizar um canvas grande:
-1. o leitor libera o canvas falho;
-2. reduz o DPR;
-3. tenta novamente automaticamente.
+O objetivo é acelerar a próxima página sem transformar o leitor em um pré-carregador pesado.
 
-Também há limite de dimensão:
-- celular: até aproximadamente 8192 px por lado;
-- desktop: até aproximadamente 16384 px por lado.
+### Prefetch cancelável
 
-O orçamento de pixels existente continua ativo.
+Ao trocar de página, fechar o leitor ou mandar o app para segundo plano:
+- a fila de prefetch é esvaziada;
+- o AbortController cancela downloads especulativos;
+- imagens pré-decodificadas distantes são liberadas.
 
-### Memória adaptativa
+### WebP/CBR/CBZ sem tela vazia
 
-Em navegadores Chromium que expõem `performance.memory`, o leitor detecta pressão de heap.
+A troca paginada agora usa staging leve:
+1. a página atual continua visível;
+2. a nova página começa a carregar em uma camada invisível;
+3. depois de decodificada, ocorre a troca;
+4. em pressão de memória o staging é desativado e o leitor volta ao comportamento econômico.
 
-Quando o uso passa de aproximadamente 72%:
-- prefetch é suspenso;
-- cache de páginas cai para cerca de 3;
-- slots verticais distantes são liberados;
-- páginas Blob antigas são revogadas.
+Isso melhora a sensação de velocidade sem manter várias páginas na memória por muito tempo.
 
-Em navegadores sem essa API, o comportamento anterior permanece.
+### Manifestos mais rápidos
 
-### PDF remoto mais rápido
+Manifestos de páginas passam a usar o cache normal do navegador/Service Worker em vez de `no-store` em toda abertura.
 
-- conexão normal no celular usa chunks de aproximadamente 512 KB;
-- desktop usa até aproximadamente 1 MB;
-- conexão lenta/economia de dados usa 256 KB;
-- `disableAutoFetch` fica restrito a economia, rede lenta ou pressão de memória.
+O catálogo principal continua usando atualização própria para detectar novas HQs.
 
-Assim um celular em conexão boa não fica desnecessariamente limitado.
+### Segundo plano
 
-### Menos trabalho repetido
+Ao ocultar o app:
+- prefetch é cancelado;
+- páginas decodificadas distantes são liberadas;
+- cache de páginas distantes é reduzido;
+- PDF.js recebe um pedido de limpeza de recursos;
+- progresso Vertical/Webtoon continua salvo.
 
-Brilho, contraste e sépia não fazem mais uma varredura completa em todas as páginas a cada movimento do slider.
+## Mantido da v0.3.13
 
-Atualizações visuais de:
-- baixa resolução;
-- zoom móvel;
-- qualidade PDF
-
-são agrupadas por `requestAnimationFrame`.
-
-### Vertical/Webtoon
-
-- mantém IntersectionObserver em navegadores modernos;
-- possui fallback por rolagem para WebViews sem IntersectionObserver;
-- miniaturas também possuem fallback compatível;
-- somente a janela ao redor da página atual é carregada no fallback.
-
-### CBR/CBZ
-
-JSZip agora abre o arquivo com `createFolders:false`, evitando objetos de pasta desnecessários na memória.
-
-## Recursos preservados
-
-- Acervo 1, Acervo 2 e Acervo Marvel;
-- Página única, Flipbook, Vertical e Webtoon;
-- PDF sem pisca;
-- qualidade PDF Econômico/Automático/Nítido;
-- zoom móvel;
+- runtimes PDF/CBR/CBZ sob demanda;
+- fallback de CDN;
+- retry automático de PDF com DPR menor;
+- limite de canvas;
+- detecção de pressão de memória;
+- fallback para WebViews sem IntersectionObserver;
+- qualidade PDF adaptativa;
 - filtro de baixa resolução;
-- offline;
-- atalhos A–Z;
-- Margens;
-- marcadores e progresso.
+- zoom móvel;
+- Acervo 1, Acervo 2 e Acervo Marvel.
 
 ## Validação
 
