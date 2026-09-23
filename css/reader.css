@@ -1176,3 +1176,45 @@
     padding:0 16px!important;
   }
 }
+
+
+/* Manga-HQ-hub v0.3.23 — leitura vertical resiliente no celular */
+.reader-mode-vertical .page-slot{
+  position:relative;
+}
+.reader-mode-vertical .page-slot[data-loading="1"] .page-placeholder{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  min-height:72px;
+  color:#8b94a7;
+}
+.reader-mode-vertical .page-slot[data-loading="1"] .page-placeholder::before{
+  content:"";
+  width:16px;
+  height:16px;
+  flex:0 0 16px;
+  border-radius:50%;
+  border:2px solid rgba(148,163,184,.22);
+  border-top-color:#a5b4fc;
+  animation:mhqr-page-spin .75s linear infinite;
+}
+@keyframes mhqr-page-spin{to{transform:rotate(360deg)}}
+@media(max-width:850px){
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot{
+    content-visibility:auto;
+    contain:layout paint style;
+    contain-intrinsic-size:auto 150dvw;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot[data-loading="1"]{
+    background:#05070c!important;
+  }
+  .reader.mobile-fullbleed.reader-mode-vertical .page-placeholder{
+    font-size:12px;
+    letter-spacing:.02em;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .reader-mode-vertical .page-slot[data-loading="1"] .page-placeholder::before{animation:none}
+}
