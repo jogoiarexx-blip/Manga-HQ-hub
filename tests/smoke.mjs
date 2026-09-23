@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.22';
+const VERSION = '0.3.23';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -37,6 +37,11 @@ assert(app.includes('function zoomAtPoint'), 'point-centered zoom helper is pres
 assert(app.includes('function flipbookLayoutClass'), 'flipbook single-page layout helper is present');
 assert(app.includes('readerHistoryActive'), 'reader history integration is present');
 assert(app.includes('verticalOffsetRatio'), 'vertical exact progress is present');
+assert(app.includes('function ensureVerticalWindowLoaded'), 'vertical recovery window is present');
+assert(app.includes('function verticalSlotNearViewport'), 'visible vertical slots are protected');
+assert(app.includes("if (performanceProfile().mobile && !hasSavedReaderMode) state.mode = 'vertical';"), 'mobile defaults to vertical reading');
+assert(app.includes('const caps = pdfRenderCaps(vertical, index);'), 'PDF fast-pass caps use base caps without recursion');
+assert(app.includes('const caps = pdfRenderCapsForPass(vertical, index, fastPass);'), 'PDF renderer applies fast-pass caps');
 assert(app.includes('function queuePagePrefetch'), 'controlled prefetch queue is present');
 assert(app.includes('pageTransitioning'), 'page navigation coalescing is present');
 assert(app.includes('fileUrl'), 'external PDF fileUrl support is present');
