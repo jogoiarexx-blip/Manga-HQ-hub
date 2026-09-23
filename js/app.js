@@ -2,7 +2,7 @@ const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
 const CONFIG = {
-  appVersion: '0.3.19',
+  appVersion: '0.3.20',
   folderIds: [],
   folderUrls: [],
   folderId: '',
@@ -1609,6 +1609,35 @@ function renderAlphabeticalCards(items) {
     return heading + itemCard(item);
   }).join('');
 }
+function libraryStickyScrollOffset() {
+  const topbar = $('.topbar');
+  const sticky = $('#libraryStickyHead');
+  const topbarHeight = Math.round(topbar?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 60 : 76));
+  const stickyHeight = Math.round(sticky?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 104 : 122));
+  return Math.max(96, topbarHeight + stickyHeight + 14);
+}
+let libraryStickyResizeObserver = null;
+function updateLibraryStickyMetrics() {
+  const topbar = $('.topbar');
+  const sticky = $('#libraryStickyHead');
+  if (!sticky) return;
+  const topbarHeight = Math.round(topbar?.getBoundingClientRect?.().height || (performanceProfile().mobile ? 60 : 76));
+  const stickyHeight = Math.round(sticky.getBoundingClientRect().height || 0);
+  document.documentElement.style.setProperty('--library-sticky-top', `${topbarHeight}px`);
+  document.documentElement.style.setProperty('--library-scroll-offset', `${Math.max(96, topbarHeight + stickyHeight + 14)}px`);
+}
+function setupLibraryStickyHeader() {
+  const sticky = $('#libraryStickyHead');
+  if (!sticky) return;
+  updateLibraryStickyMetrics();
+  if ('ResizeObserver' in window) {
+    libraryStickyResizeObserver?.disconnect?.();
+    libraryStickyResizeObserver = new ResizeObserver(() => updateLibraryStickyMetrics());
+    libraryStickyResizeObserver.observe(sticky);
+    const topbar = $('.topbar');
+    if (topbar) libraryStickyResizeObserver.observe(topbar);
+  }
+}
 function jumpToCatalogLetter(letter) {
   const targetLetter = String(letter || '').toUpperCase();
   if (!targetLetter) return;
@@ -1621,9 +1650,12 @@ function jumpToCatalogLetter(letter) {
   state.renderLimit = Math.max(state.renderLimit, index + (performanceProfile().mobile ? 18 : 30));
   render();
   requestAnimationFrame(() => {
+    updateLibraryStickyMetrics();
     const section = document.querySelector(`[data-alpha-section="${CSS.escape(targetLetter)}"]`);
     setActiveAlphabetLetter(targetLetter, true);
-    section?.scrollIntoView({ behavior:'smooth', block:'start' });
+    if (!section) return;
+    const y = section.getBoundingClientRect().top + window.scrollY - libraryStickyScrollOffset();
+    window.scrollTo({ top:Math.max(0, y), left:0, behavior:'smooth' });
   });
 }
 function setActiveAlphabetLetter(letter, reveal = false) {
@@ -1635,7 +1667,10 @@ function setActiveAlphabetLetter(letter, reveal = false) {
   host.querySelectorAll('[data-alpha]').forEach(btn => btn.classList.toggle('active', btn.dataset.alpha === value));
   if (reveal) {
     const active = host.querySelector(`[data-alpha="${CSS.escape(value)}"]`);
-    active?.scrollIntoView?.({ behavior:'smooth', block:'nearest', inline:'center' });
+    if (active) {
+      const left = active.offsetLeft - (host.clientWidth - active.offsetWidth) / 2;
+      host.scrollTo({ left:Math.max(0, left), behavior:'smooth' });
+    }
   }
 }
 let alphabetScrollRaf = 0;
@@ -3856,6 +3891,7 @@ $('#mobileFilterBtn')?.addEventListener('click', () => {
   $('#mobileFilterBtn')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   $('#mobileFilterBtn').textContent = open ? '×' : '☰';
   $('#mobileFilterBtn').title = open ? 'Fechar filtros' : 'Abrir filtros';
+  requestAnimationFrame(updateLibraryStickyMetrics);
 });
 
 $('#localBtn').addEventListener('click', () => $('#localFileInput').click());
@@ -4377,6 +4413,8 @@ if (storageGet(LS.theme) === 'light') document.documentElement.classList.add('li
 setNetworkStatus();
 applyDisplayPrefs();
 setupCatalogAutoLoad();
+setupLibraryStickyHeader();
+window.addEventListener('resize', updateLibraryStickyMetrics, { passive:true });
 window.addEventListener('online', () => { setNetworkStatus(); applyDisplayPrefs(false); warmReaderRuntimes().catch(() => {}); });
 window.addEventListener('offline', () => { setNetworkStatus(); warmReaderRuntimes().catch(() => {}); });
 if ('serviceWorker' in navigator) {
