@@ -1,6 +1,15 @@
-# Manga-HQ-hub v0.3.23
+# Manga-HQ-hub v0.3.24
 
 Leitor/PWA de mangás e HQs com foco em navegação rápida no celular.
+
+## v0.3.24 — instalação PWA visível
+
+- Adiciona botão destacado **Instalar no celular** na tela inicial.
+- Mantém também um atalho de instalação no cabeçalho mobile.
+- Usa o prompt nativo quando o navegador oferece instalação PWA.
+- Quando o navegador não oferece prompt, mostra instruções para Android ou iPhone/iPad.
+- Oculta os botões automaticamente quando o app já está instalado.
+
 
 ## v0.3.23 — leitor vertical mobile resiliente
 
