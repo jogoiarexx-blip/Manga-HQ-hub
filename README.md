@@ -1,78 +1,43 @@
-# Manga-HQ-hub v0.3.15
+# Manga-HQ-hub v0.3.16
 
-Leitor/PWA de mangás e HQs com núcleo otimizado para leitura longa no celular, PDF, WebP, CBR e CBZ.
+Leitor/PWA de mangás e HQs otimizado para celular.
 
-## v0.3.15 — progresso e Vertical/Webtoon mais leves
+## v0.3.16 — botão Sair e fechamento confiável
 
-### Progresso sem microtravadas
+### Botão Sair
 
-O progresso de leitura deixou de ser gravado no `localStorage` a cada atualização imediatamente.
+- A seta de retorno do leitor foi substituída por um botão textual **Sair**.
+- O botão possui área de toque maior no celular.
+- O listener agora chama `closeReader(false)` explicitamente.
+- O evento de clique não é mais passado por engano como parâmetro de histórico.
 
-Agora:
-- alterações são agrupadas por um pequeno debounce;
-- fechar o leitor força uma gravação imediata;
-- mandar o app para segundo plano também força a gravação;
-- ações explícitas como **Marcar lido/não lido** continuam sendo persistidas imediatamente.
+### Saída imediata
 
-Isso reduz bloqueios síncronos no thread principal durante leitura e rolagem.
+Ao tocar em **Sair**:
+1. o leitor some da tela imediatamente;
+2. o scroll da biblioteca é liberado;
+3. o progresso é salvo;
+4. a entrada artificial do histórico é consumida;
+5. PDF.js, canvases, workers, blobs e caches do documento são limpos em segundo plano.
 
-### Estatísticas da biblioteca
+Isso evita a sensação de botão travado em PDFs grandes.
 
-O leitor não recalcula mais todos os totais da biblioteca em toda troca de página.
+### Botão Voltar do Android/navegador
 
-As contagens completas só são atualizadas quando o item muda entre:
-- não lido;
-- lendo;
-- concluído.
+O histórico continua funcionando:
+- ao abrir uma HQ, o leitor cria uma entrada própria;
+- o botão Voltar fecha o leitor;
+- a saída pelo botão **Sair** remove essa entrada sem sair do site.
 
-### Vertical/Webtoon em HQs grandes
+### Recursos preservados
 
-A descoberta da página atual deixou de medir todos os `.page-slot` a cada scroll.
-
-O núcleo agora:
-1. usa um ponto de leitura dentro do viewport;
-2. identifica diretamente o slot sob esse ponto;
-3. se necessário, mede apenas uma pequena janela ao redor da página atual.
-
-Isso mantém o custo de rolagem praticamente constante mesmo quando a HQ tem centenas de páginas.
-
-### Slots ativos
-
-O leitor mantém um `Set` apenas com as páginas Vertical/Webtoon realmente carregadas.
-
-Na limpeza de memória:
-- só esses slots ativos são examinados;
-- renders PDF fora da janela continuam sendo cancelados;
-- Blob URLs distantes continuam revogados;
-- placeholders não carregados não entram mais na varredura.
-
-### Pintura do navegador
-
-Vertical/Webtoon usam `content-visibility:auto` e contenção de pintura.
-
-Páginas distantes podem ser ignoradas pelo motor de renderização até se aproximarem do viewport, reduzindo layout/paint em documentos longos.
-
-### Próxima edição
-
-A procura pela próxima HQ da série agora é cacheada para o item aberto, evitando filtrar e ordenar todo o catálogo em cada troca de página.
-
-### Miniaturas
-
-Ao mudar de página, somente a miniatura anteriormente ativa e a atual recebem atualização de classe. O leitor não percorre mais todas as miniaturas abertas a cada página.
-
-## Mantido das versões anteriores
-
-- deduplicação de extração/download;
-- predecode limitado;
-- prefetch cancelável;
-- staging sem tela vazia;
-- PDF com retry de DPR;
-- runtimes sob demanda;
-- pressão de memória adaptativa;
-- fallback para WebViews antigos;
-- filtro de baixa resolução;
-- zoom móvel;
+- PDF, WebP, CBR, CBZ e RAR;
+- Página única, Flipbook, Vertical e Webtoon;
 - qualidade PDF adaptativa;
+- zoom móvel;
+- filtro de baixa resolução;
+- prefetch cancelável;
+- deduplicação de páginas;
 - Acervo 1, Acervo 2 e Acervo Marvel.
 
 ## Validação
