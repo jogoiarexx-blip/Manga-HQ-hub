@@ -1,4 +1,4 @@
-const APP_VERSION = '0.3.12';
+const APP_VERSION = '0.3.13';
 const CACHE_PREFIX = 'manga-hq-hub-ghpages-';
 const LEGACY_CACHE_PREFIXES = ['manga-hq-reader-ghpages-'];
 const CACHE = `${CACHE_PREFIX}v${APP_VERSION}`;
@@ -41,7 +41,6 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await cache.addAll(CORE);
-    await cacheReaderRuntimes(cache);
     await self.skipWaiting();
   })());
 });
