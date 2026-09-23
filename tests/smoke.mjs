@@ -105,7 +105,7 @@ assert(app.includes('existing?.archive === archive'), 'page extraction/download 
 assert(app.includes("cache:'default'"), 'page manifests use browser cache');
 assert(app.includes('const canStage = Boolean(oldStages.length'), 'image staging swap exists');
 assert(app.includes("stage.style.visibility = 'hidden'"), 'staged images stay hidden until ready');
-assert(app.includes("const images = scope?.matches?.('.page-stage') ? $('img', scope) : $('.page-stage img', scope || document);"), 'staged image wiring uses querySelectorAll helper');
+assert(app.includes("const images = scope?.matches?.('.page-stage') ? $$('img', scope) : $$('.page-stage img', scope || document);"), 'staged image wiring uses querySelectorAll helper');
 assert(app.includes('progressSaveTimer: 0'), 'progress write batching state exists');
 assert(app.includes('function flushProgressSave'), 'progress flush helper exists');
 assert(app.includes('function progressBucket'), 'progress bucket optimization exists');
@@ -119,7 +119,8 @@ assert(index.includes('class="reader-close-btn reader-exit-btn"'), 'reader exit 
 assert(app.includes("closeReader(false).catch"), 'exit button calls explicit normal close');
 assert(app.includes('const triggeredByHistory = fromHistory === true'), 'close history flag is strict boolean');
 assert(app.includes("reader.classList.add('hidden')"), 'reader hides before cleanup');
-assert(app.indexOf("reader.classList.add('hidden')") < app.indexOf('await cleanupReaderData();'), 'reader hides before heavy cleanup');
+const closeReaderBlock = app.slice(app.indexOf('async function closeReader('), app.indexOf("window.addEventListener('popstate'", app.indexOf('async function closeReader(')));
+assert(closeReaderBlock.indexOf("reader.classList.add('hidden')") >= 0 && closeReaderBlock.indexOf("reader.classList.add('hidden')") < closeReaderBlock.indexOf('await cleanupReaderData();'), 'reader hides before heavy cleanup');
 assert(readerCss.includes('.reader-exit-btn'), 'reader exit button CSS exists');
 assert(index.includes('id="closeReader"'), 'reader exit button exists');
 assert(app.includes("closeReader(false).catch"), 'exit button calls normal close explicitly');
