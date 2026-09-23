@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.17';
+const VERSION = '0.3.18';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.17'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.18'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -109,11 +109,25 @@ assert(app.includes("const images = scope?.matches?.('.page-stage') ? $$('img', 
 assert(app.includes('progressSaveTimer: 0'), 'progress write batching state exists');
 assert(app.includes('function flushProgressSave'), 'progress flush helper exists');
 const openItemBlock = app.slice(app.indexOf('async function openItem('), app.indexOf('async function loadPdfJs', app.indexOf('async function openItem(')));
-assert(openItemBlock.indexOf('flushProgressSave();') >= 0 && openItemBlock.indexOf('flushProgressSave();') < openItemBlock.indexOf('await cleanupReaderData();'), 'progress flushes before reader cleanup when switching items');
-const cleanupReaderBlock = app.slice(app.indexOf('async function cleanupReaderData('), app.indexOf('async function closeReader(', app.indexOf('async function cleanupReaderData(')));
+assert(openItemBlock.indexOf('flushProgressSave();') >= 0 && openItemBlock.indexOf('flushProgressSave();') < openItemBlock.indexOf('cleanupReaderData();'), 'progress flushes before reader cleanup when switching items');
+assert(openItemBlock.includes('cleanupReaderData();'), 'item switching detaches the old reader synchronously');
+assert(!openItemBlock.includes('await cleanupReaderData();'), 'item switching never waits for heavy cleanup');
+const cleanupReaderBlock = app.slice(app.indexOf('function cleanupReaderData('), app.indexOf('function pushReaderHistoryEntry(', app.indexOf('function cleanupReaderData(')));
 assert(cleanupReaderBlock.includes('const pdfDoc = state.pdfDoc;'), 'cleanup captures the old PDF document');
-assert(cleanupReaderBlock.indexOf('state.pdfDoc = null;') >= 0 && cleanupReaderBlock.indexOf('state.pdfDoc = null;') < cleanupReaderBlock.indexOf('await pdfDoc.destroy()'), 'old PDF is detached before asynchronous destroy');
-assert(cleanupReaderBlock.indexOf('state.verticalLoaded.clear();') >= 0 && cleanupReaderBlock.indexOf('state.verticalLoaded.clear();') < cleanupReaderBlock.indexOf('await pdfDoc.destroy()'), 'reader state is cleared before asynchronous PDF destroy');
+assert(cleanupReaderBlock.includes('state.pdfDoc = null;'), 'old PDF is detached from global state immediately');
+assert(cleanupReaderBlock.includes('queueReaderCleanup({'), 'heavy reader resources are queued for background cleanup');
+assert(app.includes('async function drainReaderCleanupQueue'), 'background cleanup queue exists');
+assert(app.includes('requestIdleCallback(run, { timeout:1400 })'), 'heavy cleanup waits for an idle window');
+assert(app.includes('pdfLoadingTask: null'), 'PDF loading task is tracked separately');
+const openPdfBlock = app.slice(app.indexOf('async function openPdf('), app.indexOf('async function fetchArrayBufferWithProgress', app.indexOf('async function openPdf(')));
+assert(openPdfBlock.includes('const pdfDoc = await task.promise;'), 'resolved PDF stays local until token validation');
+assert(openPdfBlock.indexOf('if (token !== state.openToken)') < openPdfBlock.indexOf('state.pdfDoc = pdfDoc;'), 'stale PDF is rejected before touching active pdfDoc');
+assert(app.includes('readerHistoryClosing'), 'pending history close state exists');
+assert(app.includes('readerHistoryReopenPending'), 'rapid reopen history state exists');
+assert(app.includes('function settleReaderHistoryClose'), 'history settle helper exists');
+assert(app.includes('function schedulePdfMaintenance'), 'periodic PDF memory maintenance exists');
+assert(app.includes('function schedulePdfPageQualityUpgrade'), 'mobile PDF fast-pass quality upgrade exists');
+assert(app.includes('pdfVerticalWindow'), 'PDF vertical mode has a tighter RAM window');
 assert(app.includes('function progressBucket'), 'progress bucket optimization exists');
 assert(app.includes('document.elementFromPoint'), 'vertical current page uses viewport probe');
 assert(app.includes('verticalLoaded: new Set()'), 'active vertical slot registry exists');
@@ -126,7 +140,9 @@ assert(app.includes("closeReader(false).catch"), 'exit button calls explicit nor
 assert(app.includes('const triggeredByHistory = fromHistory === true'), 'close history flag is strict boolean');
 assert(app.includes("reader.classList.add('hidden')"), 'reader hides before cleanup');
 const closeReaderBlock = app.slice(app.indexOf('async function closeReader('), app.indexOf("window.addEventListener('popstate'", app.indexOf('async function closeReader(')));
-assert(closeReaderBlock.indexOf("reader.classList.add('hidden')") >= 0 && closeReaderBlock.indexOf("reader.classList.add('hidden')") < closeReaderBlock.indexOf('await cleanupReaderData();'), 'reader hides before heavy cleanup');
+assert(closeReaderBlock.indexOf("reader.classList.add('hidden')") >= 0 && closeReaderBlock.indexOf("reader.classList.add('hidden')") < closeReaderBlock.indexOf('cleanupReaderData();'), 'reader hides before resource detachment');
+assert(closeReaderBlock.includes('scheduleLibraryRefreshAfterReaderClose();'), 'library rebuild is deferred after exit');
+assert(!closeReaderBlock.includes('await cleanupReaderData();'), 'exit never waits for heavy cleanup');
 assert(readerCss.includes('.reader-exit-btn'), 'reader exit button CSS exists');
 assert(index.includes('id="closeReader"'), 'reader exit button exists');
 assert(app.includes("closeReader(false).catch"), 'exit button calls normal close explicitly');
