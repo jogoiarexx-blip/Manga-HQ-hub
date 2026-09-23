@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.12';
+const VERSION = '0.3.13';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -86,6 +86,15 @@ assert(app.includes("appVersion: '0.3.12'"), 'internal app fallback version is c
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
+assert(app.includes('RUNTIME_FALLBACK_URLS'), 'runtime fallback URLs exist');
+assert(app.includes('async function importRuntime'), 'runtime import fallback helper exists');
+assert(app.includes('memoryPressure'), 'memory pressure detection exists');
+assert(app.includes('function renderPdfCanvasAttempt'), 'PDF render retry helper exists');
+assert(app.includes('maxCanvasDimension'), 'PDF canvas dimension guard exists');
+assert(app.includes("'IntersectionObserver' in window"), 'IntersectionObserver compatibility fallback exists');
+assert(app.includes('displayRefreshRaf'), 'visual refresh batching exists');
+assert(app.includes('createFolders:false'), 'JSZip avoids folder objects');
+assert(!sw.includes('await cacheReaderRuntimes(cache);'), 'service worker does not eagerly download reader runtimes');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
