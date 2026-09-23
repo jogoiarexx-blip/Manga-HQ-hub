@@ -1,4 +1,4 @@
-/* Manga-HQ-hub reader styles — v0.3.14 */
+/* Manga-HQ-hub reader styles — v0.3.15 */
 
 /* Manga-HQ-hub v0.2.2 — Flipbook */
 .page-stage.flipbook-stage{
@@ -1119,4 +1119,24 @@
 }
 @media(prefers-reduced-motion:reduce){
   .pdf-stage-enter{animation:none!important}
+}
+
+
+/* Manga-HQ-hub v0.3.15 — vertical paint containment */
+.reader-mode-vertical .page-slot{
+  content-visibility:auto;
+  contain-intrinsic-size:auto 1200px;
+}
+.reader-mode-vertical .page-slot[data-loaded="1"]{
+  contain:layout paint style;
+}
+.reader-mode-vertical .page-slot>img,
+.reader-mode-vertical .page-slot>.pdf-page-canvas{
+  contain:paint;
+}
+@media(max-width:850px){
+  .reader.mobile-fullbleed.reader-mode-vertical .page-slot{
+    content-visibility:auto;
+    contain-intrinsic-size:auto 1400px;
+  }
 }
