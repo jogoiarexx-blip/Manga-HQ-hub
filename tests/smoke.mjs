@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 
-const VERSION = '0.3.18';
+const VERSION = '0.3.19';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const assert = (condition, message) => {
   if (!condition) {
@@ -82,7 +82,7 @@ assert(app.includes('pdf-stage-staging'), 'staged PDF page swap exists');
 assert(app.includes('function schedulePdfVerticalQualityUpgrade'), 'focused vertical PDF quality upgrade exists');
 assert(app.includes("$('.page-slot').forEach(slot => state.verticalObserver.observe(slot))"), 'vertical slot iteration is correct');
 assert(!app.split('\n').some(line => line.trim() === "$('.page-slot', root).forEach(slot => {"), 'vertical mobile scaling uses querySelectorAll helper');
-assert(app.includes("appVersion: '0.3.18'"), 'internal app fallback version is current');
+assert(app.includes("appVersion: '0.3.19'"), 'internal app fallback version is current');
 assert(readerCss.includes('.pdf-stage-staging'), 'PDF staging CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-page'), 'PDF margin trimming CSS exists');
 assert(readerCss.includes('.reader.trim-margins.reader-mode-vertical'), 'vertical PDF margin trimming exists');
@@ -148,6 +148,22 @@ assert(index.includes('id="closeReader"'), 'reader exit button exists');
 assert(app.includes("closeReader(false).catch"), 'exit button calls normal close explicitly');
 assert(app.includes("const triggeredByHistory = fromHistory === true"), 'history close flag uses strict boolean');
 assert(readerCss.includes('.reader-exit-btn'), 'reader exit button styling exists');
+assert(app.includes("history.scrollRestoration = 'manual'"), 'browser scroll restoration is disabled on boot');
+assert(app.includes('function forceInitialHomeTop'), 'initial home top reset exists');
+const alphabetSyncBlock = app.slice(app.indexOf('function updateAlphabetFromScroll'), app.indexOf('function scheduleAlphabetScrollSync', app.indexOf('function updateAlphabetFromScroll')));
+assert(alphabetSyncBlock.includes("setActiveAlphabetLetter(current.dataset.alphaSection || '', false)"), 'passive alphabet sync never scrolls the page');
+assert(index.includes('featuredCarouselDots'), 'featured carousel dots exist');
+assert(index.includes('carouselPosition'), 'featured carousel position indicator exists');
+assert(app.includes('function scheduleFeaturedCarouselAutoplay'), 'featured carousel autoplay exists');
+assert(app.includes('function setFeaturedCarouselIndex'), 'featured carousel indexed navigation exists');
+assert(app.includes('function pauseFeaturedCarousel'), 'featured carousel pauses on interaction');
+assert(css.includes('.featured-card.is-active'), 'active featured card styling exists');
+assert(css.includes('.carousel-dot.active'), 'carousel dot active styling exists');
+assert(index.includes('recentSection'), 'recent additions rail exists');
+assert(app.includes('function renderRecentArrivals'), 'recent additions rendering exists');
+assert(index.includes('randomReadBtn'), 'random reading shortcut exists');
+assert(app.includes('function openRandomLibraryItem'), 'random reading action exists');
+assert(index.includes('exploreLibraryBtn'), 'explore catalog hero action exists');
 assert(manifest.name === 'Manga-HQ-hub', 'PWA manifest name');
 
 if (!process.exitCode) console.log('Smoke validation OK');
