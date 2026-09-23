@@ -2240,35 +2240,12 @@ function releaseReaderVisuals() {
   });
 }
 
-async function renderPdfInto(container, index, token, vertical = false) {
-  if (!state.pdfDoc || token !== state.renderToken || !container?.isConnected) return;
-  const page = await state.pdfDoc.getPage(index + 1);
-  if (token !== state.renderToken || !container?.isConnected) return;
-  const base = page.getViewport({ scale: 1 });
-  if (state.pages[index]) { state.pages[index].width = base.width; state.pages[index].height = base.height; }
-  const root = $('#readerBody');
-  const spread = !vertical && effectiveMode() === 'spread';
-  const profile = performanceProfile();
-  const baseWidth = vertical ? Math.min(root.clientWidth, state.mode === 'webtoon' ? 820 : 1100) : root.clientWidth;
-  const chromeGap = profile.mobile ? 2 : 28;
-  const availableWidth = Math.max(spread ? 150 : 240, (baseWidth - (vertical ? 4 : chromeGap)) / (spread ? 2 : 1));
-  const availableHeight = Math.max(240, root.clientHeight - (profile.mobile ? 2 : 24));
-  let scale = availableWidth / base.width;
-  if (!vertical && state.fit === 'contain') scale = Math.min(scale, availableHeight / base.height);
-  if (!vertical && state.fit === 'height') scale = availableHeight / base.height;
-  const mobileReadingScale = performanceProfile().mobile && (vertical || effectiveMode() === 'page') ? mobileReadingScaleFor(index, base.width, base.height) : 1;
-  scale = Math.max(.25, Math.min(4, scale * (vertical ? mobileReadingScale : state.zoom * mobileReadingScale)));
-  const viewport = page.getViewport({ scale });
-  const pdfCaps = pdfRenderCaps(vertical, index);
-  let dpr = Math.min(pdfCaps.dprCap, window.devicePixelRatio || 1);
-  const estimatedPixels = viewport.width * viewport.height * dpr * dpr;
-  if (estimatedPixels > pdfCaps.pixelBudget) dpr *= Math.sqrt(pdfCaps.pixelBudget / estimatedPixels);
-  dpr = Math.max(.8, Math.min(pdfCaps.dprCap, dpr));
+function isPdfRenderCancelled(error) {
+  return error?.name === 'RenderingCancelledException' || error?.name === 'AbortError';
+}
+async function renderPdfCanvasAttempt(page, viewport, dpr, vertical, index) {
   const canvas = document.createElement('canvas');
   canvas.className = 'pdf-page-canvas';
-  canvas.style.setProperty('--mobile-reading-scale', String(mobileReadingScale));
-  canvas.style.setProperty('--mobile-reading-width', `${Math.round(mobileReadingScale * 100)}dvw`);
-  canvas.classList.toggle('mobile-reading-enlarged', performanceProfile().mobile && mobileReadingScale > 1.01);
   canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
   canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
   canvas.style.width = `${Math.floor(viewport.width)}px`;
@@ -2276,27 +2253,134 @@ async function renderPdfInto(container, index, token, vertical = false) {
   canvas.setAttribute('aria-label', `Página ${index + 1}`);
   canvas.dataset.renderDpr = dpr.toFixed(3);
   canvas.dataset.pdfQuality = pdfQualityMode();
+
   const ctx = canvas.getContext('2d', { alpha:false, desynchronized:true });
-  if (ctx) { ctx.imageSmoothingEnabled = true; try { ctx.imageSmoothingQuality = 'high'; } catch {} }
-  const renderContext = { canvasContext: ctx, viewport, transform: dpr === 1 ? null : [dpr, 0, 0, dpr, 0, 0] };
-  if (!vertical) {
-    state.pdfRenderTask?.cancel?.();
-    state.pdfRenderTask = page.render(renderContext);
-    try { await state.pdfRenderTask.promise; } catch (e) { if (e?.name !== 'RenderingCancelledException') throw e; }
-    finally { if (state.pdfRenderTask) state.pdfRenderTask = null; }
-  } else {
-    const task = page.render(renderContext);
-    state.pdfVerticalTasks.set(index, task);
-    try { await task.promise; }
-    catch (e) { if (e?.name !== 'RenderingCancelledException') throw e; }
-    finally { if (state.pdfVerticalTasks.get(index) === task) state.pdfVerticalTasks.delete(index); }
+  if (!ctx) {
+    canvas.width = 1; canvas.height = 1;
+    throw new Error('Canvas 2D indisponível neste navegador.');
   }
+  ctx.imageSmoothingEnabled = true;
+  try { ctx.imageSmoothingQuality = 'high'; } catch {}
+
+  const task = page.render({
+    canvasContext:ctx,
+    viewport,
+    transform:dpr === 1 ? null : [dpr,0,0,dpr,0,0]
+  });
+
+  if (vertical) state.pdfVerticalTasks.set(index, task);
+  else {
+    state.pdfRenderTask?.cancel?.();
+    state.pdfRenderTask = task;
+  }
+
+  try {
+    await task.promise;
+    return canvas;
+  } catch (error) {
+    try { canvas.width = 1; canvas.height = 1; } catch {}
+    throw error;
+  } finally {
+    if (vertical) {
+      if (state.pdfVerticalTasks.get(index) === task) state.pdfVerticalTasks.delete(index);
+    } else if (state.pdfRenderTask === task) {
+      state.pdfRenderTask = null;
+    }
+  }
+}
+
+async function renderPdfInto(container, index, token, vertical = false) {
+  if (!state.pdfDoc || token !== state.renderToken || !container?.isConnected) return;
+  const page = await state.pdfDoc.getPage(index + 1);
   if (token !== state.renderToken || !container?.isConnected) return;
-  container.innerHTML = ''; container.appendChild(canvas);
+
+  const base = page.getViewport({ scale:1 });
+  if (state.pages[index]) { state.pages[index].width = base.width; state.pages[index].height = base.height; }
+
+  const root = $('#readerBody');
+  const spread = !vertical && effectiveMode() === 'spread';
+  const profile = performanceProfile();
+  const baseWidth = vertical ? Math.min(root.clientWidth, state.mode === 'webtoon' ? 820 : 1100) : root.clientWidth;
+  const chromeGap = profile.mobile ? 2 : 28;
+  const availableWidth = Math.max(spread ? 150 : 240, (baseWidth - (vertical ? 4 : chromeGap)) / (spread ? 2 : 1));
+  const availableHeight = Math.max(240, root.clientHeight - (profile.mobile ? 2 : 24));
+
+  let scale = availableWidth / base.width;
+  if (!vertical && state.fit === 'contain') scale = Math.min(scale, availableHeight / base.height);
+  if (!vertical && state.fit === 'height') scale = availableHeight / base.height;
+
+  const mobileScale = profile.mobile && (vertical || effectiveMode() === 'page')
+    ? mobileReadingScaleFor(index, base.width, base.height)
+    : 1;
+  scale = Math.max(.25, Math.min(4, scale * (vertical ? mobileScale : state.zoom * mobileScale)));
+
+  const viewport = page.getViewport({ scale });
+  const caps = pdfRenderCaps(vertical, index);
+  let dpr = Math.min(caps.dprCap, window.devicePixelRatio || 1);
+
+  const estimatedPixels = viewport.width * viewport.height * dpr * dpr;
+  if (estimatedPixels > caps.pixelBudget) dpr *= Math.sqrt(caps.pixelBudget / estimatedPixels);
+
+  const maxCanvasDimension = profile.mobile ? 8192 : 16384;
+  if (viewport.width * dpr > maxCanvasDimension) dpr = Math.min(dpr, maxCanvasDimension / Math.max(1, viewport.width));
+  if (viewport.height * dpr > maxCanvasDimension) dpr = Math.min(dpr, maxCanvasDimension / Math.max(1, viewport.height));
+  dpr = Math.max(.8, Math.min(caps.dprCap, dpr));
+
+  const attempts = [...new Set([
+    Number(dpr.toFixed(3)),
+    Number(Math.max(.8, dpr * .72).toFixed(3))
+  ])];
+
+  let canvas = null;
+  let usedDpr = dpr;
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts.length; attempt++) {
+    if (token !== state.renderToken || !container?.isConnected) return;
+    usedDpr = attempts[attempt];
+    try {
+      canvas = await renderPdfCanvasAttempt(page, viewport, usedDpr, vertical, index);
+      break;
+    } catch (error) {
+      if (isPdfRenderCancelled(error)) return;
+      lastError = error;
+      if (attempt === attempts.length - 1) throw error;
+      console.warn(`PDF página ${index + 1}: reduzindo qualidade após falha de renderização.`, error);
+    }
+  }
+  if (!canvas) throw lastError || new Error('Falha ao renderizar a página PDF.');
+
+  canvas.style.setProperty('--mobile-reading-scale', String(mobileScale));
+  canvas.style.setProperty('--mobile-reading-width', `${Math.round(mobileScale * 100)}dvw`);
+  canvas.classList.toggle('mobile-reading-enlarged', profile.mobile && mobileScale > 1.01);
+  canvas.dataset.renderDpr = usedDpr.toFixed(3);
+
+  if (token !== state.renderToken || !container?.isConnected) {
+    try { canvas.width = 1; canvas.height = 1; } catch {}
+    return;
+  }
+
+  const previous = container.querySelector('.pdf-page-canvas');
+  container.replaceChildren(canvas);
+  if (previous && previous !== canvas) {
+    try { previous.width = 1; previous.height = 1; } catch {}
+  }
+
   applyLowResFilterToElement(canvas, index, canvas.width, canvas.height);
   scheduleReaderVisualRefresh();
-  if (vertical) { container.style.aspectRatio = `${base.width}/${base.height}`; container.style.minHeight='0'; applyMobileReadingScaleToSlot(container,index,base.width,base.height); if (index === state.page) requestAnimationFrame(() => { if (state.verticalRestore) restoreVerticalPosition(true); alignMobileReadingX(); }); }
+
+  if (vertical) {
+    container.style.aspectRatio = `${base.width}/${base.height}`;
+    container.style.minHeight = '0';
+    applyMobileReadingScaleToSlot(container, index, base.width, base.height);
+    if (index === state.page) {
+      requestAnimationFrame(() => {
+        if (state.verticalRestore) restoreVerticalPosition(true);
+        alignMobileReadingX();
+      });
+    }
+  }
 }
+
 
 function flipbookAnimationClass() {
   if (effectiveMode() !== 'spread') return '';
@@ -2473,6 +2557,14 @@ function prefetchNeighborSpreads(expectedToken = state.renderToken) {
   for (const i of candidates) queuePagePrefetch(i, expectedToken);
 }
 
+function releaseReaderMemoryIfNeeded() {
+  const p = performanceProfile();
+  if (!p.memoryPressure) return;
+  resetPrefetchQueue();
+  if (isVerticalMode()) cleanupVerticalSlots(true);
+  if (state.pageUrls.size) trimPageCache(state.page);
+}
+
 function trimPageCache(center) {
   const limit = performanceProfile().cacheLimit;
   if (state.pageUrls.size <= limit) return;
@@ -2586,23 +2678,47 @@ async function renderReaderPages() {
       if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
     }
   }
-  updateProgress(); updatePageControls(); scheduleReaderVisualRefresh();
+  updateProgress(); updatePageControls(); scheduleReaderVisualRefresh(); releaseReaderMemoryIfNeeded();
 }
 
 function setupVerticalObserver() {
   const root = $('#readerBody');
-  state.verticalObserver = new IntersectionObserver(entries => {
-    for (const entry of entries) if (entry.isIntersecting) loadVerticalSlot(entry.target).catch(() => {});
-  }, { root, rootMargin: `${performanceProfile().observerMargin}px 0px`, threshold: 0.01 });
-  $$('.page-slot').forEach(slot => state.verticalObserver.observe(slot));
+  const profile = performanceProfile();
   let ticking = false;
-  state.verticalScrollHandler = () => {
-    if (ticking) return; ticking = true;
+
+  const update = () => {
+    if (ticking) return;
+    ticking = true;
     requestAnimationFrame(() => {
-      ticking = false; updateVerticalPosition(); cleanupVerticalSlots();
+      ticking = false;
+      updateVerticalPosition();
+      cleanupVerticalSlots();
+      if (!state.verticalObserver) {
+        const keep = Math.max(1, profile.verticalWindow + 1);
+        for (let i=Math.max(0,state.page-keep); i<=Math.min(state.pages.length-1,state.page+keep); i++) {
+          const slot = $(`.page-slot[data-i="${i}"]`);
+          if (slot) loadVerticalSlot(slot).catch(() => {});
+        }
+      }
     });
   };
-  root.addEventListener('scroll', state.verticalScrollHandler, { passive: true });
+
+  if ('IntersectionObserver' in window) {
+    state.verticalObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) loadVerticalSlot(entry.target).catch(() => {});
+    }, { root, rootMargin:`${profile.observerMargin}px 0px`, threshold:.01 });
+    $$('.page-slot').forEach(slot => state.verticalObserver.observe(slot));
+  } else {
+    state.verticalObserver = null;
+    const keep = Math.max(1, profile.verticalWindow + 1);
+    for (let i=Math.max(0,state.page-keep); i<=Math.min(state.pages.length-1,state.page+keep); i++) {
+      const slot = $(`.page-slot[data-i="${i}"]`);
+      if (slot) loadVerticalSlot(slot).catch(() => {});
+    }
+  }
+
+  state.verticalScrollHandler = update;
+  root.addEventListener('scroll', update, { passive:true });
 }
 
 async function loadVerticalSlot(slot) {
