@@ -99,7 +99,7 @@ const state = {
   pages: [], page: 0, mode: 'spread', fit: 'contain', direction: 'ltr', zoom: 1, collection: '', archive: null,
   pageUrls: new Map(), pageUse: new Map(), verticalObserver: null,
   verticalScrollHandler: null, renderToken: 0, openToken: 0, pdfObjectUrl: '', pdfDoc: null, pdfRenderTask: null, pdfVerticalTasks: new Map(), pdfWarmupSeq: 0, pdfVerticalUpgradeTimer: 0, pdfLastStagedPage: -1, largePending: null,
-  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
+  readerDownloadController: null, offlineControllers: new Map(), touchStart: null, offlineIds: new Set(), offlineMeta: new Map(), offlineBusy: new Set(), autoScrollId: 0, autoScrollLast: 0, pinch: null, immersive: false, trimMargins: false, syncController: null, syncStatus: [], thumbRenderToken: 0, thumbObserver: null, thumbScrollHandler: null, thumbQueue: [], thumbActive: 0, flipDirection: '', flipDrag: null, lastFlipDragAt: 0, pageSetSeq: 0, readerViewportW: 0, readerViewportH: 0, imageZoomRaf: 0, offlineProgress: new Map(), lastTouchTap: null, panoramaRerenderPending: false, readerHistoryActive: false, pageTransitioning: false, pendingPageTarget: null, prefetchQueue: [], prefetchQueued: new Set(), prefetchActive: 0, verticalSaveTimer: 0, verticalRestore: null, externalSourceStatus: new Map(), activeAlphabetLetter: '', displayRefreshRaf: 0
 };
 
 const favorites = new Set(readJson(LS.fav, []));
@@ -2194,18 +2194,52 @@ async function renderThumbDrawer() {
   const token = ++state.thumbRenderToken;
   const max = Math.min(state.pages.length, profile.mobile ? 160 : 300);
   state.thumbObserver?.disconnect?.();
+  state.thumbObserver = null;
+  if (state.thumbScrollHandler) $('#thumbDrawer')?.removeEventListener('scroll', state.thumbScrollHandler);
+  state.thumbScrollHandler = null;
   state.thumbQueue = []; state.thumbActive = 0;
-  grid.innerHTML = Array.from({length:max},(_,i)=>`<button class="thumb-item ${i===state.page?'active':''}" data-thumb-page="${i}"><span>${i+1}</span><div class="thumb-preview" data-thumb-preview="${i}"></div></button>`).join('') + (state.pages.length>max ? `<p class="thumb-limit">Mostrando ${max} de ${state.pages.length} páginas. As miniaturas são carregadas somente quando se aproximam da tela.</p>` : '');
+
+  grid.innerHTML = Array.from({length:max},(_,i)=>`<button class="thumb-item ${i===state.page?'active':''}" data-thumb-page="${i}"><span>${i+1}</span><div class="thumb-preview" data-thumb-preview="${i}"></div></button>`).join('')
+    + (state.pages.length>max ? `<p class="thumb-limit">Mostrando ${max} de ${state.pages.length} páginas. As miniaturas são carregadas somente quando se aproximam da tela.</p>` : '');
+
   const root = $('#thumbDrawer');
-  state.thumbObserver = new IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      state.thumbObserver?.unobserve(entry.target);
-      const index = Number(entry.target.dataset.thumbPreview);
-      if (Number.isFinite(index)) queueThumbPreview(entry.target, index, token);
+  const mounts = $$('.thumb-preview', grid);
+
+  if ('IntersectionObserver' in window) {
+    state.thumbObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        state.thumbObserver?.unobserve(entry.target);
+        const index = Number(entry.target.dataset.thumbPreview);
+        if (Number.isFinite(index)) queueThumbPreview(entry.target, index, token);
+      }
+    }, { root, rootMargin:profile.mobile ? '360px 0px' : '520px 0px', threshold:.01 });
+    mounts.forEach(mount => state.thumbObserver.observe(mount));
+    return;
+  }
+
+  // Fallback para WebViews antigos sem IntersectionObserver.
+  let raf = 0;
+  const loadNear = () => {
+    raf = 0;
+    if (token !== state.thumbRenderToken || !root?.isConnected) return;
+    const rr = root.getBoundingClientRect();
+    const margin = profile.mobile ? 360 : 520;
+    for (const mount of mounts) {
+      if (mount.dataset.queued || mount.dataset.loaded === '1') continue;
+      const rect = mount.getBoundingClientRect();
+      if (rect.bottom >= rr.top - margin && rect.top <= rr.bottom + margin) {
+        const index = Number(mount.dataset.thumbPreview);
+        if (Number.isFinite(index)) queueThumbPreview(mount, index, token);
+      }
     }
-  }, { root, rootMargin: profile.mobile ? '360px 0px' : '520px 0px', threshold:0.01 });
-  $$('.thumb-preview', grid).forEach(mount => state.thumbObserver.observe(mount));
+  };
+  state.thumbScrollHandler = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(loadNear);
+  };
+  root?.addEventListener('scroll', state.thumbScrollHandler, { passive:true });
+  loadNear();
 }
 function openThumbDrawer() {
   $('#thumbDrawer')?.classList.remove('hidden');
@@ -2214,9 +2248,13 @@ function openThumbDrawer() {
 function closeThumbDrawer() {
   state.thumbRenderToken++;
   state.thumbObserver?.disconnect?.(); state.thumbObserver = null;
+  if (state.thumbScrollHandler) $('#thumbDrawer')?.removeEventListener('scroll', state.thumbScrollHandler); state.thumbScrollHandler = null;
+  if (state.thumbScrollHandler) $('#thumbDrawer')?.removeEventListener('scroll', state.thumbScrollHandler);
+  state.thumbScrollHandler = null;
   state.thumbQueue = []; state.thumbActive = 0;
   $('#thumbDrawer')?.classList.add('hidden');
 }
+
 function showReaderError(title, message, offerLocal = false) {
   $('#readerFooter').classList.add('hidden');
   $('#readerBody').innerHTML = `<div class="reader-error"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p><div class="reader-error-actions">
