@@ -2695,8 +2695,8 @@ function trimPageCache(center) {
   }
 }
 
-function wirePagedImageErrors(indexes, expectedToken = state.renderToken) {
-  $$('.page-stage img').forEach((img, n) => {
+function wirePagedImageErrors(indexes, expectedToken = state.renderToken, scope = $('#readerBody')) {
+  $('.page-stage img', scope || document).forEach((img, n) => {
     img.decoding = 'async';
     img.addEventListener('load', () => {
       const index = indexes[n] ?? state.page;
@@ -2764,34 +2764,78 @@ async function renderReaderPages() {
     requestAnimationFrame(() => restoreVerticalPosition(true));
   } else {
     $('#readerFooter').classList.remove('hidden');
-    $('#readerLoading').classList.remove('hidden'); $('#loadingText').textContent = `Carregando página ${state.page + 1}…`;
+    const root = $('#readerBody');
+    const profile = performanceProfile();
+    const oldStages = [...root.querySelectorAll(':scope > .page-stage')];
+    const canStage = Boolean(oldStages.length && root.classList.contains('page-mode') && !profile.memoryPressure);
+    if (!canStage) $('#readerLoading').classList.remove('hidden');
+    $('#loadingText').textContent = `Carregando página ${state.page + 1}…`;
+
+    let stage = null;
     try {
       const spread = effectiveMode() === 'spread';
       const indexes = spread ? spreadIndexes() : [state.page];
       const urls = await Promise.all(indexes.map(i => getPageUrl(i, token)));
       if (token !== state.renderToken) return;
-      releaseReaderVisuals();
-      $('#readerBody').classList.add('page-mode');
+
+      root.classList.add('page-mode');
       const zoomStyle = state.zoom === 1 ? '' : `style="width:${Math.round(state.zoom * 100)}%;max-width:none;height:auto"`;
       const dirClass = spread && state.direction === 'rtl' ? ' spread-rtl' : '';
       const bookClass = spread ? ` flipbook-stage${flipbookLayoutClass(indexes)}${flipbookAnimationClass()}` : '';
-      $('#readerBody').innerHTML = `<div class="page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}">${urls.map((url, n) => spread ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>` : `<img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}>`).join('')}</div>`;
-      wirePagedImageErrors(indexes, token);
-      const visibleImages = [...$('#readerBody').querySelectorAll('.page-stage img')];
+
+      stage = document.createElement('div');
+      stage.className = `page-stage ${spread ? 'spread-stage' : ''}${dirClass}${bookClass} ${state.fit === 'width' ? 'fit-width' : state.fit === 'height' ? 'fit-height' : ''}`;
+      stage.innerHTML = urls.map((url, n) => spread
+        ? `<div class="flipbook-page flipbook-page-${n === 0 ? 'left' : 'right'}"><img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}><span class="flipbook-page-number">${indexes[n] + 1}</span><span class="flipbook-corner-hint" aria-hidden="true"></span></div>`
+        : `<img src="${url}" alt="Página ${indexes[n] + 1}" decoding="async" fetchpriority="high" loading="eager" draggable="false" ${pageDimensions(indexes[n]).width ? `width="${pageDimensions(indexes[n]).width}" height="${pageDimensions(indexes[n]).height}"` : ''} ${zoomStyle}>`
+      ).join('');
+
+      if (canStage) {
+        stage.style.position = 'absolute';
+        stage.style.inset = '0';
+        stage.style.visibility = 'hidden';
+        stage.style.pointerEvents = 'none';
+        root.appendChild(stage);
+      } else {
+        releaseReaderVisuals();
+        root.replaceChildren(stage);
+      }
+
+      wirePagedImageErrors(indexes, token, stage);
+      const visibleImages = [...stage.querySelectorAll('img')];
       if (visibleImages.length) {
         await Promise.race([
           Promise.allSettled(visibleImages.map(img => typeof img.decode === 'function' ? img.decode() : Promise.resolve())),
-          new Promise(resolve => setTimeout(resolve, performanceProfile().mobile ? 180 : 260))
+          new Promise(resolve => setTimeout(resolve, profile.mobile ? 120 : 200))
         ]);
-        if (token !== state.renderToken) return;
       }
-      if (performanceProfile().prefetch) {
+      if (token !== state.renderToken) return;
+
+      if (canStage && stage.isConnected) {
+        for (const old of oldStages) {
+          old.querySelectorAll('img').forEach(img => { img.onload=null; img.onerror=null; try { img.removeAttribute('src'); } catch {} });
+        }
+        stage.style.removeProperty('position');
+        stage.style.removeProperty('inset');
+        stage.style.removeProperty('visibility');
+        stage.style.removeProperty('pointer-events');
+        root.replaceChildren(stage);
+      }
+
+      if (profile.prefetch) {
         if (spread) prefetchNeighborSpreads(token);
-        else { const p=performanceProfile(); const targets=p.prefetchBothDirections?[state.page-1,state.page+1]:[state.page+1]; targets.filter(i=>i>=0&&i<state.pages.length).forEach(i=>queuePagePrefetch(i,token)); }
+        else {
+          const targets = profile.prefetchBothDirections ? [state.page-1,state.page+1] : [state.page+1];
+          targets.filter(i=>i>=0&&i<state.pages.length).forEach(i=>queuePagePrefetch(i,token));
+        }
       }
     } catch (err) {
       if (token === state.renderToken) showReaderError('Falha ao carregar página', err.message);
     } finally {
+      if (stage && token !== state.renderToken && stage.isConnected && !oldStages.includes(stage)) {
+        stage.querySelectorAll('img').forEach(img => { try { img.removeAttribute('src'); } catch {} });
+        stage.remove();
+      }
       if (token === state.renderToken) $('#readerLoading').classList.add('hidden');
     }
   }
